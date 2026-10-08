@@ -14,13 +14,14 @@ You need your own copy of the game. This repository holds no game files and neve
 - Renders the levels with their lightmaps, including KnowWonder's sunlight.
 - Draws skeletal meshes (characters, plants, props) and plays their animations, including anim channels such as eye blinks and head look that animate part of the skeleton.
 - Plays the game's music, sound effects and dialog (stored as Bink audio), with subtitles.
+- Simulates and draws the game's particle emitters, such as waterfall mist, falling leaves, fireflies and water splashes.
 
 Not working yet:
 
 - Combined animations (`AT_Combine`), transient anim channels and tweening between skeletal animations.
 - Shadows from sunlight on meshes.
 - The 9 sounds stored as `XA` audio, which stay silent.
-- The particle system.
+- A few particle settings: spawning particles on a mesh (`MeshSpawning`, used by about ten effects such as bush leaves and steam jets, which spawn at their start location instead), spawning particles where another sub-emitter's particles collide, and resetting a whole emitter (`AutoReset` on the actor).
 
 ## Running
 
@@ -40,6 +41,7 @@ Point SurrealEngine at the game's install folder, the one that contains `System`
 - Interpolation (`PHYS_Interpolating`) keeps its path state in an `InterpolationManager` actor that the moving actor owns and has as its `TickParent`: the `Last` and `Dest` points, `PhysAlpha` and `PhysRate`. Each section is a cubic bezier from `Last` to `Dest` through `Last.StartControlPoint` and `Dest.EndControlPoint` (offsets from each point), travelled at the actor's `IPSpeed`. Reaching `Dest` calls the point's `InterpolateEnd(Manager, bForward)`, which sets the next `Dest`, starts a pause, or finishes.
 - The audio device's `MusicVolume` and `SoundVolume` are floats from 0 to 1 (the ini's `ALAudio.ALAudioSubsystem` section), not bytes. The options page sets them at startup with `set ini:Engine.Engine.AudioDevice`.
 - Menu text (`HPMenu.int`) and dialog subtitles (`hpdialog.int`) are UTF-16 files.
+- Particles: emitter actors use `DrawType` 9 and hold up to four sprite sub-emitters in arrays of structs (`SpawningInfo[4]`, `TextureInfo[4]` and so on), following Unreal Engine 2's sprite emitters. Their `Emitters` array is never filled in, so the engine simulates the particles from those settings directly. Besides the Unreal Engine 2 settings, `VelocityInfo` adds `Chaos` (a random push, every `ChaosDelay` seconds or continuously when that is 0) and `Damping`. Scripts turn emission on and off through `LocalInfo[i].Disabled`.
 - Cutscene scripts are localization files in `System/CutScenes`, which the game names like `Cutscenes\AspFTut1_KodaIntro`. The cutscene parser switches on its command words, so it relies on string `switch` cases matching regardless of case, as they do in UE1.
 
 `Tools/BrotherBear` has small Python scripts used to research these formats. `upkg.py` dumps a package's name, import and export tables. `ubc.py` walks every function's bytecode and checks its size against the package. `kwanim.py` parses the compressed animations and checks that every one is read to its exact size.
