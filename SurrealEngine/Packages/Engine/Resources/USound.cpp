@@ -65,9 +65,21 @@ void USound::GetSound()
 	{
 		source = AudioSource::CreateMp3(Data);
 	}
-	else if (engine->LaunchInfo.IsBrotherBear())
+	else if (Format == "bik")
 	{
-		// To do: decode Bink audio ("bik") and "XA". Play silence of the right length for now.
+		try
+		{
+			source = AudioSource::CreateBink(Data);
+		}
+		catch (const std::exception& e)
+		{
+			LogMessage("Could not decode " + Name.ToString() + ": " + e.what());
+		}
+	}
+
+	if (!source && engine->LaunchInfo.IsBrotherBear())
+	{
+		// To do: decode "XA". Play silence of the right length for now.
 		static bool warned = false;
 		if (!warned)
 		{
@@ -82,18 +94,20 @@ void USound::GetSound()
 		engine->audiodev->GetDevice()->AddSound(this);
 		return;
 	}
-	else
+	else if (!source)
 	{
 		Exception::Throw("Unsupported sound format: " + Format.ToString());
 	}
 
+	// GetSamples counts sample frames, so a stereo sound holds twice as many values
+	channels = source->GetChannels();
+
 	#define ALIGN(x, a) ((x & ~(a-1)) + a)
-	samples.resize(ALIGN(source->GetSamples(), 4));
+	samples.resize(ALIGN(source->GetSamples() * channels, 4));
 	samples.resize(ALIGN(source->ReadSamples(samples.data(), samples.size()), 4));
 
 	frequency = source->GetFrequency();
-	duration = samples.size() / (float)frequency;
-	channels = source->GetChannels();
+	duration = samples.size() / (float)(frequency * channels);
 
 	loopInfo.Looped = source->bIsLooped;
 	loopInfo.LoopStart = source->loopStart;

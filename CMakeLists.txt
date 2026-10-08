@@ -162,6 +162,7 @@ set(SURREALCOMMON_SOURCES
 	SurrealEngine/VM/Iterator.h
 	SurrealEngine/Audio/AudioSource.h
 	SurrealEngine/Audio/AudioSource.cpp
+	SurrealEngine/Audio/BinkAudioSource.cpp
 	SurrealEngine/Audio/AudioDevice.cpp
 	SurrealEngine/Audio/AudioDevice.h
 	SurrealEngine/Video/VideoPlayer.cpp
