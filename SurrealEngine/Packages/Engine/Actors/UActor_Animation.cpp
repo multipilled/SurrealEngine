@@ -17,9 +17,18 @@ bool UActor::IsAnimating()
 	return AnimRate() != 0.0f;
 }
 
+static bool IsMainChannel(const std::optional<NameString>& RootBone)
+{
+	return !RootBone.has_value() || RootBone->IsNone();
+}
+
 bool UActor::IsAnimating_HP(std::optional<NameString> RootBone)
 {
-	LogUnimplemented("Actor.IsAnimating_HP");
+	if (!IsMainChannel(RootBone))
+	{
+		LogUnimplemented("Actor.IsAnimating with a root bone");
+		return false;
+	}
 	return IsAnimating();
 }
 
@@ -37,7 +46,11 @@ void UActor::FinishAnim()
 
 void UActor::FinishAnim_HP(std::optional<NameString> RootBone)
 {
-	LogUnimplemented("Actor.FinishAnim_HP");
+	if (!IsMainChannel(RootBone))
+	{
+		LogUnimplemented("Actor.FinishAnim with a root bone");
+		return;
+	}
 	FinishAnim();
 }
 
@@ -319,12 +332,23 @@ void UActor::TweenAnim(const NameString& sequence, float tweenTime)
 
 void UActor::PlayAnim_HP(const NameString& Sequence, std::optional<float> Rate, std::optional<float> TweenTime, std::optional<EAnimType> Type, std::optional<NameString> RootBone)
 {
-	LogUnimplemented("Actor.PlayAnim_HP");
+	// To do: anims on part of the skeleton (RootBone) and combining anims (AT_Combine)
+	if (!IsMainChannel(RootBone))
+	{
+		LogUnimplemented("Actor.PlayAnim with a root bone");
+		return;
+	}
+	PlayAnim(Sequence, Rate.value_or(1.0f), TweenTime.value_or(0.0f));
 }
 
 void UActor::LoopAnim_HP(const NameString& Sequence, std::optional<float> Rate, std::optional<float> TweenTime, std::optional<float> MinRate, std::optional<EAnimType> Type, std::optional<NameString> RootBone)
 {
-	LogUnimplemented("Actor.LoopAnim_HP");
+	if (!IsMainChannel(RootBone))
+	{
+		LogUnimplemented("Actor.LoopAnim with a root bone");
+		return;
+	}
+	LoopAnim(Sequence, Rate.value_or(1.0f), TweenTime.value_or(0.0f), MinRate.value_or(0.0f));
 }
 
 void UActor::TickAnimation(float elapsed)
@@ -600,13 +624,22 @@ UActor* UActor::CreateAnimChannel(UClass* NewClass, EAnimType Type, const NameSt
 
 int UActor::BoneNumber(const NameString& Bone)
 {
-	LogUnimplemented("Actor.BoneNumber");
-	return 0;
+	if (USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh()))
+	{
+		for (size_t i = 0; i < mesh->RefSkeleton.size(); i++)
+		{
+			if (mesh->RefSkeleton[i].Name == Bone)
+				return (int)i;
+		}
+	}
+	return -1;
 }
 
 NameString UActor::BoneName(int Bone)
 {
-	LogUnimplemented("Actor.BoneName");
+	USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh());
+	if (mesh && Bone >= 0 && (size_t)Bone < mesh->RefSkeleton.size())
+		return mesh->RefSkeleton[Bone].Name;
 	return {};
 }
 

@@ -7,6 +7,7 @@
 #include "Packages/Core/UClass.h"
 #include "Packages/Engine/UViewport.h"
 #include "Packages/Engine/Resources/USound.h"
+#include "Packages/Engine/Resources/Mesh/UAnimation.h"
 #include "Packages/Engine/Resources/Level/ULevel.h"
 #include "Packages/Engine/Resources/Level/UModel.h"
 #include "Packages/Engine/Resources/Mesh/UMesh.h"
@@ -511,7 +512,10 @@ void NActor::LastRendered(UObject *Self, float &ReturnValue)
 
 void NActor::LinkSkelAnim(UObject* Self, UObject* Anim)
 {
-	LogUnimplemented("Actor.LinkSkelAnim");
+	if (engine->LaunchInfo.IsBrotherBear())
+		UObject::Cast<UActor>(Self)->SkelAnim() = UObject::TryCast<UAnimation>(Anim);
+	else
+		LogUnimplemented("Actor.LinkSkelAnim");
 }
 
 void NActor::LoopAnim(UObject* Self, const NameString& Sequence, std::optional<float> Rate, std::optional<float> TweenTime, std::optional<float> MinRate)

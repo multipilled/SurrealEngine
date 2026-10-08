@@ -11,6 +11,7 @@
 #include "Packages/Engine/Actors/Info/ULevelInfo.h"
 #include "Packages/Engine/Actors/NavigationPoint/UNavigationPoint.h"
 #include "Packages/Engine/Resources/Mesh/USkeletalMesh.h"
+#include "Packages/Engine/Resources/Mesh/UAnimation.h"
 #include "Packages/Engine/Resources/Level/UModel.h"
 
 bool VisibleMesh::DrawMesh(VisibleFrame* frame, UActor* actor, bool wireframe, bool translucentPass)
@@ -558,7 +559,124 @@ bool VisibleMesh::DrawLodMeshFace(VisibleFrame* frame, UActor* actor, UActor* li
 
 bool VisibleMesh::DrawSkeletalMesh(VisibleFrame* frame, UActor* actor, UActor* lightLocationActor, USkeletalMesh* mesh, const mat4& ObjectToWorld, const mat3& ObjectNormalToWorld, bool translucentPass)
 {
-	return DrawLodMesh(frame, actor, lightLocationActor, mesh, ObjectToWorld, ObjectNormalToWorld, translucentPass);
+	// Brother Bear's skeletal meshes have no vertex animation frames. They are posed from their bones instead.
+	if (!engine->LaunchInfo.IsBrotherBear() || !mesh->Verts.empty())
+		return DrawLodMesh(frame, actor, lightLocationActor, mesh, ObjectToWorld, ObjectNormalToWorld, translucentPass);
+
+	UActor* animSource = actor;
+	if (actor->bAnimByOwner() && actor->Owner())
+		animSource = actor->Owner();
+
+	UAnimation* anim = animSource->SkelAnim() ? animSource->SkelAnim() : mesh->DefaultAnimation;
+
+	static Array<vec3> points, normals;
+	mesh->GetPose(anim, animSource->AnimSequence(), animSource->AnimFrame(), points, normals);
+
+	SetupLodMeshTextures(actor, mesh);
+	return DrawSkinnedFaces(frame, actor, lightLocationActor, mesh, points, normals, ObjectToWorld, ObjectNormalToWorld, translucentPass);
+}
+
+bool VisibleMesh::DrawSkinnedFaces(VisibleFrame* frame, UActor* actor, UActor* lightLocationActor, USkeletalMesh* mesh, const Array<vec3>& points, const Array<vec3>& normals, const mat4& ObjectToWorld, const mat3& ObjectNormalToWorld, bool translucentPass)
+{
+	auto lightsys = &engine->Level->Light;
+
+	uint32_t polyFlags = 0;
+	switch (actor->Style())
+	{
+	default: break;
+	case STY_None: break;
+	case STY_AlphaBlend: break;
+	case STY_Masked: polyFlags |= PF_Masked; break;
+	case STY_Translucent: polyFlags |= PF_Translucent; break;
+	case STY_Modulated: polyFlags |= PF_Modulated; break;
+	}
+	if (actor->bNoSmooth()) polyFlags |= PF_NoSmooth;
+	if (actor->bSelected()) polyFlags |= PF_Selected;
+	if (actor->bMeshEnviroMap()) polyFlags |= PF_Environment;
+	if (actor->bMeshCurvy()) polyFlags |= PF_Flat;
+	if (actor->bUnlit() || actor->Region().ZoneNumber == 0) polyFlags |= PF_Unlit;
+
+	UZoneInfo* zoneActor = engine->GetZoneActor(actor->Region().ZoneNumber);
+
+	VertexLight vertexLight;
+	lightsys->InitVertexLight(vertexLight, lightLocationActor, zoneActor);
+
+	bool needTranslucentPass = false;
+
+	GouraudVertex vertices[3];
+	vec3 vertexNormals[3];
+	for (const MeshFace& face : mesh->Faces)
+	{
+		if (face.MaterialIndex >= mesh->Materials.size())
+			continue;
+
+		const MeshMaterial& material = mesh->Materials[face.MaterialIndex];
+		if (material.PolyFlags & PF_Invisible)
+			continue;
+
+		uint32_t renderflags = material.PolyFlags | polyFlags;
+		UTexture* tex = (renderflags & PF_Environment) ? engine->render->Mesh.envmap : engine->render->Mesh.textures[material.TextureIndex];
+		if (!tex)
+			continue;
+
+		bool isTranslucent = (renderflags & (PF_Translucent | PF_Modulated | PF_Highlighted)) != 0;
+		if (isTranslucent && !translucentPass)
+		{
+			needTranslucentPass = true;
+			continue;
+		}
+		else if (!isTranslucent && translucentPass)
+		{
+			continue;
+		}
+
+		engine->render->UpdateTexture(tex);
+
+		TextureInfo texinfo;
+		engine->render->UpdateTextureInfo(texinfo, tex);
+
+		float uscale = (texinfo.Texture ? texinfo.Texture->UsedMipmaps.front().Width : 256) * (1.0f / 255.0f);
+		float vscale = (texinfo.Texture ? texinfo.Texture->UsedMipmaps.front().Height : 256) * (1.0f / 255.0f);
+
+		bool outOfBounds = false;
+		for (int i = 0; i < 3; i++)
+		{
+			const MeshWedge& wedge = mesh->Wedges[face.Indices[i]];
+			if (wedge.Vertex >= points.size())
+			{
+				outOfBounds = true;
+				break;
+			}
+			vertices[i].Point = (ObjectToWorld * vec4(points[wedge.Vertex], 1.0f)).xyz();
+			vertices[i].UV = { wedge.U * uscale, wedge.V * vscale };
+			vertexNormals[i] = normalize(ObjectNormalToWorld * normals[wedge.Vertex]);
+		}
+		if (outOfBounds)
+			continue;
+
+		if (renderflags & PF_Environment)
+		{
+			mat3 rotmat = mat3(frame->Frame.WorldToView * frame->Frame.ObjectToWorld);
+			for (int i = 0; i < 3; i++)
+			{
+				vec3 v = normalize(vertices[i].Point);
+				vec3 p = rotmat * reflect(v, vertexNormals[i]);
+				vertices[i].UV = { (p.x + 1.0f) * 128.0f * uscale, (p.y + 1.0f) * 128.0f * vscale };
+			}
+		}
+
+		for (int i = 0; i < 3; i++)
+		{
+			vertices[i].Light = vertexLight.GetVertexLight(vertices[i].Point, vertexNormals[i], !!(renderflags & PF_Unlit), !!(renderflags & PF_TwoSided));
+			vertices[i].Fog = vertexLight.GetVertexFog(vertices[i].Point);
+		}
+
+		renderflags |= PF_RenderFog;
+
+		frame->Device->DrawGouraudPolygon(&frame->Frame, texinfo, vertices, 3, renderflags);
+	}
+
+	return needTranslucentPass;
 }
 
 bool VisibleMesh::DrawMeshDX(VisibleFrame* frame, UActor* actor, UActor* lightLocationActor, UMesh* mesh, const mat4& ObjectToWorld, const mat3& ObjectNormalToWorld, bool translucentPass)

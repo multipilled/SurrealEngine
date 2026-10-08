@@ -2,6 +2,9 @@
 #include "Precomp.h"
 #include "USkeletalMesh.h"
 #include "Packages/Engine/Resources/Mesh/UAnimation.h"
+#include "Engine.h"
+#include <algorithm>
+#include <cstring>
 
 void USkeletalMesh::Load(ObjectStream* stream)
 {
@@ -96,6 +99,213 @@ void USkeletalMesh::Load(ObjectStream* stream)
 	WeaponAdjust.ZAxis.x = stream->ReadFloat();
 	WeaponAdjust.ZAxis.y = stream->ReadFloat();
 	WeaponAdjust.ZAxis.z = stream->ReadFloat();
+
+	// Brother Bear keeps the sequence list in the animation. Copy it so the actor animation code can find the sequences.
+	if (engine->LaunchInfo.IsBrotherBear() && AnimSeqs.empty() && DefaultAnimation)
+	{
+		DefaultAnimation->LoadNow();
+		AnimSeqs = DefaultAnimation->AnimSeqs;
+	}
+}
+
+const Array<int>& USkeletalMesh::GetAnimBoneMap(UAnimation* anim)
+{
+	auto it = AnimBoneMaps.find(anim);
+	if (it != AnimBoneMaps.end())
+		return it->second;
+
+	Array<int>& map = AnimBoneMaps[anim];
+	map.resize(RefSkeleton.size(), -1);
+	for (size_t i = 0; i < RefSkeleton.size(); i++)
+	{
+		for (size_t j = 0; j < anim->RefBones.size(); j++)
+		{
+			if (anim->RefBones[j].Name == RefSkeleton[i].Name)
+			{
+				map[i] = (int)j;
+				break;
+			}
+		}
+	}
+	return map;
+}
+
+static void FindKeys(const Array<float>& times, float time, int& key0, int& key1, float& t)
+{
+	key0 = 0;
+	key1 = 0;
+	t = 0.0f;
+	if (times.size() < 2 || time <= times.front())
+		return;
+	if (time >= times.back())
+	{
+		key0 = key1 = (int)times.size() - 1;
+		return;
+	}
+	key1 = (int)(std::upper_bound(times.begin(), times.end(), time) - times.begin());
+	key0 = key1 - 1;
+	float span = times[key1] - times[key0];
+	t = span > 0.0f ? (time - times[key0]) / span : 0.0f;
+}
+
+static quaternion SampleRotation(const AnimTrack& track, float time)
+{
+	if (track.KeyQuat.size() < 2 || track.KeyQuat.size() != track.KeyTime.size())
+		return track.KeyQuat.front();
+	int key0, key1;
+	float t;
+	FindKeys(track.KeyTime, time, key0, key1, t);
+	const quaternion& a = track.KeyQuat[key0];
+	quaternion b = track.KeyQuat[key1];
+	if (a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0.0f)
+		b = quaternion(-b.x, -b.y, -b.z, -b.w);
+	quaternion q(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t);
+	float len = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+	return len > 0.0f ? quaternion(q.x / len, q.y / len, q.z / len, q.w / len) : a;
+}
+
+static vec3 SamplePosition(const AnimTrack& track, float time)
+{
+	if (track.KeyPos.size() < 2 || track.KeyPos.size() != track.KeyTime.size())
+		return track.KeyPos.front();
+	int key0, key1;
+	float t;
+	FindKeys(track.KeyTime, time, key0, key1, t);
+	return mix(track.KeyPos[key0], track.KeyPos[key1], t);
+}
+
+void USkeletalMesh::GetPose(UAnimation* anim, const NameString& sequence, float animFrame, Array<vec3>& outPoints, Array<vec3>& outNormals)
+{
+	// Find the animation move for the sequence
+	const AnimMove* move = nullptr;
+	const Array<int>* boneMap = nullptr;
+	float time = 0.0f;
+	if (anim && !anim->Moves.empty())
+	{
+		size_t seqIndex = 0;
+		for (size_t i = 0; i < anim->AnimSeqs.size(); i++)
+		{
+			if (anim->AnimSeqs[i].Name == sequence)
+			{
+				seqIndex = i;
+				break;
+			}
+		}
+		if (seqIndex < anim->Moves.size())
+		{
+			move = &anim->Moves[seqIndex];
+			boneMap = &GetAnimBoneMap(anim);
+			time = std::max(animFrame, 0.0f) * move->TrackTime;
+		}
+	}
+
+	// Bone transforms in mesh space. Each bone's rotation and position are relative to its parent.
+	BoneTransforms.resize(RefSkeleton.size());
+	for (size_t i = 0; i < RefSkeleton.size(); i++)
+	{
+		quaternion q = RefSkeleton[i].Orientation;
+		vec3 p = RefSkeleton[i].Position;
+
+		int animBone = boneMap ? (*boneMap)[i] : -1;
+		if (animBone != -1)
+		{
+			int trackIndex = animBone;
+			if (!move->BoneIndices.empty())
+			{
+				trackIndex = -1;
+				for (size_t j = 0; j < move->BoneIndices.size(); j++)
+				{
+					if (move->BoneIndices[j] == (uint32_t)animBone)
+					{
+						trackIndex = (int)j;
+						break;
+					}
+				}
+			}
+			if (trackIndex >= 0 && (size_t)trackIndex < move->AnimTracks.size())
+			{
+				const AnimTrack& track = move->AnimTracks[trackIndex];
+				if (!track.KeyQuat.empty())
+					q = SampleRotation(track, time);
+				if (!track.KeyPos.empty())
+					p = SamplePosition(track, time);
+			}
+		}
+
+		float x2 = q.x + q.x, y2 = q.y + q.y, z2 = q.z + q.z;
+		float xx = q.x * x2, yy = q.y * y2, zz = q.z * z2;
+		float xy = q.x * y2, xz = q.x * z2, yz = q.y * z2;
+		float wx = q.w * x2, wy = q.w * y2, wz = q.w * z2;
+		float m[3][3] =
+		{
+			{ 1.0f - (yy + zz), xy + wz, xz - wy },
+			{ xy - wz, 1.0f - (xx + zz), yz + wx },
+			{ xz + wy, yz - wx, 1.0f - (xx + yy) }
+		};
+
+		BoneTransform& bone = BoneTransforms[i];
+		if (i == 0 || RefSkeleton[i].ParentIndex >= i)
+		{
+			std::memcpy(bone.m, m, sizeof(m));
+			bone.t = p;
+		}
+		else
+		{
+			const BoneTransform& parent = BoneTransforms[RefSkeleton[i].ParentIndex];
+			for (int r = 0; r < 3; r++)
+			{
+				for (int c = 0; c < 3; c++)
+					bone.m[r][c] = parent.m[r][0] * m[0][c] + parent.m[r][1] * m[1][c] + parent.m[r][2] * m[2][c];
+			}
+			bone.t.x = parent.m[0][0] * p.x + parent.m[0][1] * p.y + parent.m[0][2] * p.z + parent.t.x;
+			bone.t.y = parent.m[1][0] * p.x + parent.m[1][1] * p.y + parent.m[1][2] * p.z + parent.t.y;
+			bone.t.z = parent.m[2][0] * p.x + parent.m[2][1] * p.y + parent.m[2][2] * p.z + parent.t.z;
+		}
+	}
+
+	// Skin the points
+	outPoints.clear();
+	outPoints.resize(Points.size(), vec3(0.0f));
+	for (size_t b = 0; b < BoneWeightIndices.size() && b < BoneTransforms.size(); b++)
+	{
+		const BoneTransform& bone = BoneTransforms[b];
+		size_t start = BoneWeightIndices[b].WeightIndex;
+		size_t end = std::min(start + BoneWeightIndices[b].Number, BoneWeights.size());
+		for (size_t k = start; k < end; k++)
+		{
+			size_t pointIndex = BoneWeights[k].PointIndex;
+			if (pointIndex >= outPoints.size())
+				continue;
+			const vec3& lp = LocalPoints[k];
+			float weight = BoneWeights[k].BoneWeight * (1.0f / 65535.0f);
+			vec3 v;
+			v.x = bone.m[0][0] * lp.x + bone.m[0][1] * lp.y + bone.m[0][2] * lp.z + bone.t.x;
+			v.y = bone.m[1][0] * lp.x + bone.m[1][1] * lp.y + bone.m[1][2] * lp.z + bone.t.y;
+			v.z = bone.m[2][0] * lp.x + bone.m[2][1] * lp.y + bone.m[2][2] * lp.z + bone.t.z;
+			outPoints[pointIndex] += v * weight;
+		}
+	}
+
+	// Smoothed normals
+	outNormals.clear();
+	outNormals.resize(outPoints.size(), vec3(0.0f));
+	for (const MeshFace& face : Faces)
+	{
+		int v0 = Wedges[face.Indices[0]].Vertex;
+		int v1 = Wedges[face.Indices[1]].Vertex;
+		int v2 = Wedges[face.Indices[2]].Vertex;
+		if ((size_t)std::max(v0, std::max(v1, v2)) >= outPoints.size())
+			continue;
+		vec3 n = cross(outPoints[v1] - outPoints[v0], outPoints[v2] - outPoints[v0]);
+		outNormals[v0] += n;
+		outNormals[v1] += n;
+		outNormals[v2] += n;
+	}
+	for (vec3& n : outNormals)
+	{
+		float len = std::sqrt(dot(n, n));
+		n = len > 0.0f ? n * (1.0f / len) : vec3(0.0f, 0.0f, 1.0f);
+	}
 }
 
 void USkeletalMesh::Save(PackageStreamWriter* stream)

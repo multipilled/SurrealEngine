@@ -44,6 +44,10 @@ public:
 	void Load(ObjectStream* stream) override;
 	void Save(PackageStreamWriter* stream) override;
 
+	// Skins the mesh with the given sequence of a KnowWonder animation (or the reference pose when there is none).
+	// animFrame is the actor's AnimFrame: 0 to 1 over the sequence.
+	void GetPose(UAnimation* anim, const NameString& sequence, float animFrame, Array<vec3>& outPoints, Array<vec3>& outNormals);
+
 	Array<ExtMeshWedge> ExtWedges;
 	Array<vec3> Points;
 	Array<RefSkeletonBone> RefSkeleton;
@@ -62,4 +66,16 @@ public:
 		vec3 YAxis;
 		vec3 ZAxis;
 	} WeaponAdjust;
+
+private:
+	struct BoneTransform
+	{
+		float m[3][3];
+		vec3 t;
+	};
+
+	const Array<int>& GetAnimBoneMap(UAnimation* anim);
+
+	std::map<UAnimation*, Array<int>> AnimBoneMaps; // Mesh bone to animation bone, per animation
+	Array<BoneTransform> BoneTransforms;
 };
