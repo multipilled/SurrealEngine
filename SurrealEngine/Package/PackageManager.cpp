@@ -939,6 +939,34 @@ Array<IntObject>& PackageManager::GetIntObjects(const NameString& metaclass)
 		return IntObjects[NameString(metaclass.ToString().substr(pos + 1))];
 }
 
+// Brother Bear localizes from files in subfolders, named like "Cutscenes\\AspFTut1_KodaIntro", where the folder's case may not match
+static fs::path FindIntFile(const fs::path& systemFolder, std::string name)
+{
+	std::replace(name.begin(), name.end(), '\\', '/');
+	auto lower = [](std::string text) { for (char& c : text) c = (char)std::tolower((unsigned char)c); return text; };
+
+	fs::path result = systemFolder;
+	for (const fs::path& part : fs::path(name))
+	{
+		fs::path next = result / part;
+		std::error_code ec;
+		if (!fs::exists(next, ec))
+		{
+			std::string lowerPart = lower(part.string());
+			for (const auto& entry : fs::directory_iterator(result, ec))
+			{
+				if (lower(entry.path().filename().string()) == lowerPart)
+				{
+					next = entry.path();
+					break;
+				}
+			}
+		}
+		result = next;
+	}
+	return result;
+}
+
 std::string PackageManager::Localize(NameString packageName, const NameString& sectionName, const NameString& keyName, const int index)
 {
 	if (packageName == "Engine" && keyName == "ClassCaption")
@@ -953,8 +981,7 @@ std::string PackageManager::Localize(NameString packageName, const NameString& s
 	{
 		try
 		{
-			const auto intFileName = fs::path(packageName.ToString() + ".int");
-			intFile = std::make_unique<IniFile>((gameSystemFolderPath / intFileName).string());
+			intFile = std::make_unique<IniFile>(FindIntFile(gameSystemFolderPath, packageName.ToString() + ".int").string());
 		}
 		catch (...)
 		{
