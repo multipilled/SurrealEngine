@@ -169,7 +169,8 @@ void USurrealAudioDevice::SetViewport(UViewport* InViewport)
 
 		if (m_Viewport)
 		{
-			if (m_Viewport->Actor()->Song() && m_Viewport->Actor()->Transition() == MTRAN_None)
+			// Brother Bear has no Song/Transition music on PlayerPawn; its music is started by the PlayMusic natives instead
+			if (!engine->LaunchInfo.IsBrotherBear() && m_Viewport->Actor()->Song() && m_Viewport->Actor()->Transition() == MTRAN_None)
 				m_Viewport->Actor()->Transition() = MTRAN_Instant;
 
 			PlayingSounds.resize(std::min(Channels, m_Device->GetTotalChannels()));
@@ -343,6 +344,9 @@ void USurrealAudioDevice::UpdateSounds(const mat4& listener)
 
 void USurrealAudioDevice::UpdateMusic()
 {
+	if (engine->LaunchInfo.IsBrotherBear())
+		return;
+
 	if (m_Viewport && m_Viewport->Actor() && m_Viewport->Actor()->Transition() != MTRAN_None)
 	{
 		// To do: this needs to fade out the old song before switching
