@@ -8,6 +8,7 @@
 #include "Packages/Engine/UViewport.h"
 #include "Packages/Engine/Resources/USound.h"
 #include "Packages/Engine/Resources/Level/ULevel.h"
+#include "Packages/Engine/Resources/Level/UModel.h"
 #include "Packages/Engine/Resources/Mesh/UMesh.h"
 #include "Packages/Engine/Actors/UActor.h"
 #include "Packages/Engine/Actors/UDecal.h"
@@ -17,6 +18,7 @@
 #include "Package/PackageManager.h"
 #include "Engine.h"
 #include "Audio/AudioDevice.h"
+#include "Audio/AudioSource.h"
 #include "Packages/Engine/Subsystems/USurrealAudioDevice.h"
 #include "Utils/StrTools.h"
 
@@ -33,7 +35,10 @@ void NActor::RegisterFunctions()
 	RegisterVMNativeFunc_2("Actor", "ChildActors", &NActor::ChildActors, 305);
 	RegisterVMNativeFunc_2("Actor", "ConsoleCommand", &NActor::ConsoleCommand, 0);
 	RegisterVMNativeFunc_3("Actor", "CycleActors", &NActor::CycleActors, 1002);
-	RegisterVMNativeFunc_6("Actor", "DemoPlaySound", &NActor::DemoPlaySound, 0);
+	if (engine->LaunchInfo.IsBrotherBear())
+		RegisterVMNativeFunc_10("Actor", "DemoPlaySound", &NActor::DemoPlaySound_BB, 0);
+	else
+		RegisterVMNativeFunc_6("Actor", "DemoPlaySound", &NActor::DemoPlaySound, 0);
 	RegisterVMNativeFunc_1("Actor", "Destroy", &NActor::Destroy, 279);
 	RegisterVMNativeFunc_1("Actor", "Error", &NActor::Error, 233);
 	RegisterVMNativeFunc_3("Actor", "FastTrace", &NActor::FastTrace, 548);
@@ -62,8 +67,13 @@ void NActor::RegisterFunctions()
 	RegisterVMNativeFunc_2("Actor", "Move", &NActor::Move, 266);
 	RegisterVMNativeFunc_3("Actor", "MoveCacheEntry", &NActor::MoveCacheEntry, 0);
 	RegisterVMNativeFunc_2("Actor", "MoveSmooth", &NActor::MoveSmooth, 3969);
-	RegisterVMNativeFunc_6("Actor", "PlayOwnedSound", &NActor::PlayOwnedSound, 0);
-	if (!engine->LaunchInfo.IsDeusEx())
+	if (engine->LaunchInfo.IsBrotherBear())
+		RegisterVMNativeFunc_10("Actor", "PlayOwnedSound", &NActor::PlayOwnedSound_BB, 0);
+	else
+		RegisterVMNativeFunc_6("Actor", "PlayOwnedSound", &NActor::PlayOwnedSound, 0);
+	if (engine->LaunchInfo.IsBrotherBear())
+		RegisterVMNativeFunc_10("Actor", "PlaySound", &NActor::PlaySound_BB, 264);
+	else if (!engine->LaunchInfo.IsDeusEx())
 		RegisterVMNativeFunc_6("Actor", "PlaySound", &NActor::PlaySound, 264);
 	else
 		RegisterVMNativeFunc_7("Actor", "PlaySound", &NActor::PlaySound_Deus, 264);
@@ -71,7 +81,10 @@ void NActor::RegisterFunctions()
 	RegisterVMNativeFunc_4("Actor", "RadiusActors", &NActor::RadiusActors, 310);
 	RegisterVMNativeFunc_1("Actor", "SetBase", &NActor::SetBase, 298);
 	RegisterVMNativeFunc_3("Actor", "SetCollision", &NActor::SetCollision, 262);
-	RegisterVMNativeFunc_3("Actor", "SetCollisionSize", &NActor::SetCollisionSize, 283);
+	if (engine->LaunchInfo.IsBrotherBear())
+		RegisterVMNativeFunc_4("Actor", "SetCollisionSize", &NActor::SetCollisionSize_BB, 283);
+	else
+		RegisterVMNativeFunc_3("Actor", "SetCollisionSize", &NActor::SetCollisionSize, 283);
 	RegisterVMNativeFunc_2("Actor", "SetLocation", &NActor::SetLocation, 267);
 	RegisterVMNativeFunc_1("Actor", "SetOwner", &NActor::SetOwner, 272);
 	if (!engine->LaunchInfo.IsDeusEx())
@@ -142,13 +155,17 @@ void NActor::RegisterFunctions()
 		RegisterVMNativeFunc_4("Actor", "PlayBlendAnim", &NActor::PlayBlendAnim, 1010);
 		RegisterVMNativeFunc_3("Actor", "TweenBlendAnim", &NActor::TweenBlendAnim, 1012);
 	}
-	if (engine->LaunchInfo.IsHarryPotter1())
+	// Brother Bear runs on the same KnowWonder engine branch as Harry Potter 1 and shares most of these natives
+	if (engine->LaunchInfo.IsHarryPotter1() || engine->LaunchInfo.IsBrotherBear())
 	{
 		RegisterVMNativeFunc_5("Actor", "PlayAnim", &NActor::PlayAnim_HP, 259);
 		RegisterVMNativeFunc_6("Actor", "LoopAnim", &NActor::LoopAnim_HP, 260);
 		RegisterVMNativeFunc_2("Actor", "GetWorldCollisionBox", &NActor::GetWorldCollisionBox, 286);
 		RegisterVMNativeFunc_1("Actor", "GetRenderExtent", &NActor::GetRenderExtent, 274);
-		RegisterVMNativeFunc_5("Actor", "CreateAnimChannel", &NActor::CreateAnimChannel, 265);
+		if (engine->LaunchInfo.IsBrotherBear())
+			RegisterVMNativeFunc_6("Actor", "CreateAnimChannel", &NActor::CreateAnimChannel_BB, 265);
+		else
+			RegisterVMNativeFunc_5("Actor", "CreateAnimChannel", &NActor::CreateAnimChannel, 265);
 		RegisterVMNativeFunc_2("Actor", "BoneNumber", &NActor::BoneNumber, 268);
 		RegisterVMNativeFunc_2("Actor", "BoneName", &NActor::BoneName, 269);
 		RegisterVMNativeFunc_2("Actor", "BonePos", &NActor::BonePos, 257);
@@ -159,7 +176,10 @@ void NActor::RegisterFunctions()
 		RegisterVMNativeFunc_3("Actor", "SaveGameSaveInfo", &NActor::SaveGameSaveInfo, 325);
 		RegisterVMNativeFunc_3("Actor", "LoadGameSaveInfo", &NActor::LoadGameSaveInfo, 326);
 		RegisterVMNativeFunc_1("Actor", "IsOSVer2kOrXP", &NActor::IsOSVer2kOrXP, 327);
-		RegisterVMNativeFunc_2("Actor", "StopSound", &NActor::StopSound_HP, 568);
+		if (engine->LaunchInfo.IsBrotherBear())
+			RegisterVMNativeFunc_3("Actor", "StopSound", &NActor::StopSound_BB, 568);
+		else
+			RegisterVMNativeFunc_2("Actor", "StopSound", &NActor::StopSound_HP, 568);
 		RegisterVMNativeFunc_2("Actor", "IsAnimating", &NActor::IsAnimating_HP, 282);
 		RegisterVMNativeFunc_1("Actor", "FinishAnim", &NActor::FinishAnim_HP, 261);
 		RegisterLatentAction(262, LatentRunState::FinishAnim);
@@ -171,6 +191,20 @@ void NActor::RegisterFunctions()
 		RegisterVMNativeFunc_1("Actor", "IsAnimating", &NActor::IsAnimating, 282);
 		RegisterVMNativeFunc_0("Actor", "FinishAnim", &NActor::FinishAnim, 261);
 		RegisterLatentAction(262, LatentRunState::FinishAnim);
+	}
+
+	if (engine->LaunchInfo.IsBrotherBear())
+	{
+		RegisterVMNativeFunc_2("Actor", "BoneRot", &NActor::BoneRot_BB, 328);
+		RegisterVMNativeFunc_1("Actor", "IsSoftwareRendering", &NActor::IsSoftwareRendering_BB, 329);
+		RegisterVMNativeFunc_2("Actor", "GetCurrentKeyState", &NActor::GetCurrentKeyState_BB, 330);
+		RegisterVMNativeFunc_1("Actor", "SaveGameExists", &NActor::SaveGameExists_BB, 3972);
+		RegisterVMNativeFunc_5("Actor", "TraceTexture", &NActor::TraceTexture_BB, 285);
+		RegisterVMNativeFunc_4("Actor", "TraceWaterSurface", &NActor::TraceWaterSurface_BB, 667);
+		RegisterVMNativeFunc_5("Actor", "ModifySound", &NActor::ModifySound_BB, 567);
+		RegisterVMNativeFunc_4("Actor", "PlayMusic", &NActor::PlayMusic_BB, 0);
+		RegisterVMNativeFunc_2("Actor", "StopMusic", &NActor::StopMusic_BB, 0);
+		RegisterVMNativeFunc_1("Actor", "StopAllMusic", &NActor::StopAllMusic_BB, 0);
 	}
 }
 
@@ -1133,4 +1167,314 @@ void NActor::StopSound_HP(UObject* Self, std::optional<UObject*> Sound, std::opt
 	UActor* SelfActor = UObject::Cast<UActor>(Self);
 	LogUnimplemented("Actor.StopSound");
 	// engine->audiodev->StopSound(SelfActor, Sound, Slot);
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Brother Bear
+
+// Same sound id scheme as NActor::PlaySound: actor bits, slot in bits 1-3 and the no-override flag in bit 0
+static int ActorSoundId_BB(UActor* actor, int slot)
+{
+	return ((((int)(ptrdiff_t)actor) & 0xffffff) << 4) + (slot << 1);
+}
+
+static void PlaySoundCommon_BB(UObject* Self, UObject* Sound, std::optional<uint8_t> Slot, std::optional<float> Volume, std::optional<bool> bNoOverride, std::optional<float> Radius, std::optional<float> Pitch, std::optional<float> PitchVariance)
+{
+	// To do: the audio device has no per-play support for Disable3D, Loop or RollOff yet
+	UActor* SelfActor = UObject::Cast<UActor>(Self);
+	USound* s = UObject::Cast<USound>(Sound);
+	if (!SelfActor || !s)
+		return;
+
+	int slot = Slot ? *Slot : SLOT_Misc;
+	int id = ActorSoundId_BB(SelfActor, slot);
+	if (bNoOverride && *bNoOverride) id |= 1;
+
+	float pitch = (Pitch && *Pitch > 0.0f) ? *Pitch : 1.0f;
+	if (PitchVariance && *PitchVariance > 0.0f)
+	{
+		// Random variation of the pitch in the range [-PitchVariance, PitchVariance]
+		float r = (float)std::rand() / (float)RAND_MAX;
+		pitch += (r * 2.0f - 1.0f) * (*PitchVariance);
+		pitch = std::max(pitch, 0.05f);
+	}
+
+	engine->audiodev->PlaySound(SelfActor, id, s, SelfActor->Location(), Volume ? *Volume : SelfActor->TransientSoundVolume(), Radius ? *Radius : SelfActor->TransientSoundRadius(), pitch, slot == SLOT_Talk);
+}
+
+void NActor::PlaySound_BB(UObject* Self, UObject* Sound, std::optional<uint8_t> Slot, std::optional<float> Volume, std::optional<bool> bNoOverride, std::optional<float> Radius, std::optional<float> Pitch, std::optional<bool> Disable3D, std::optional<bool> Loop, std::optional<float> PitchVariance, std::optional<float> RollOff)
+{
+	PlaySoundCommon_BB(Self, Sound, Slot, Volume, bNoOverride, Radius, Pitch, PitchVariance);
+}
+
+void NActor::PlayOwnedSound_BB(UObject* Self, UObject* Sound, std::optional<uint8_t> Slot, std::optional<float> Volume, std::optional<bool> bNoOverride, std::optional<float> Radius, std::optional<float> Pitch, std::optional<bool> Disable3D, std::optional<bool> Loop, std::optional<float> PitchVariance, std::optional<float> RollOff)
+{
+	PlaySoundCommon_BB(Self, Sound, Slot, Volume, bNoOverride, Radius, Pitch, PitchVariance);
+}
+
+void NActor::DemoPlaySound_BB(UObject* Self, UObject* Sound, std::optional<uint8_t> Slot, std::optional<float> Volume, std::optional<bool> bNoOverride, std::optional<float> Radius, std::optional<float> Pitch, std::optional<bool> Disable3D, std::optional<bool> Loop, std::optional<float> PitchVariance, std::optional<float> RollOff)
+{
+	PlaySoundCommon_BB(Self, Sound, Slot, Volume, bNoOverride, Radius, Pitch, PitchVariance);
+}
+
+void NActor::ModifySound_BB(UObject* Self, uint8_t parameter, float Value, std::optional<UObject*> Sound, std::optional<uint8_t> Slot, BitfieldBool& ReturnValue)
+{
+	// To do: the audio subsystem has no way to change volume/radius/pitch of a sound that is already playing
+	LogUnimplemented("Actor.ModifySound");
+	ReturnValue = false;
+}
+
+void NActor::StopSound_BB(UObject* Self, std::optional<UObject*> Sound, std::optional<uint8_t> Slot, std::optional<float> FadeOutTime)
+{
+	// To do: fade out instead of stopping instantly
+	UActor* SelfActor = UObject::Cast<UActor>(Self);
+	if (!SelfActor)
+		return;
+
+	int slot = Slot ? *Slot : SLOT_None;
+	if (slot == SLOT_None)
+	{
+		// Sounds without a slot get a unique id from the audio device and can only be found by the sound itself
+		LogUnimplemented("Actor.StopSound without a slot");
+		return;
+	}
+
+	// Stop whatever plays in that slot, with or without the no-override flag
+	int id = ActorSoundId_BB(SelfActor, slot);
+	engine->audiodev->StopSound(SelfActor, id);
+	engine->audiodev->StopSound(SelfActor, id | 1);
+}
+
+void NActor::SetCollisionSize_BB(UObject* Self, float NewRadius, float NewHeight, std::optional<float> NewWidth, BitfieldBool& ReturnValue)
+{
+	UActor* SelfActor = UObject::Cast<UActor>(Self);
+	ReturnValue = SelfActor->SetCollisionSize(NewRadius, NewHeight);
+
+	// The collision system does not use CollisionWidth yet, but keep the property in sync for scripts reading it
+	if (NewWidth && SelfActor->HasProperty("CollisionWidth"))
+		*static_cast<float*>(SelfActor->GetProperty("CollisionWidth")) = *NewWidth;
+}
+
+void NActor::CreateAnimChannel_BB(UObject* Self, UObject* NewClass, uint8_t Type, const NameString& RootBone, std::optional<bool> bTransient, std::optional<bool> bNotReplaceable, UObject*& ReturnValue)
+{
+	// To do: bNotReplaceable is ignored, like the rest of the anim channel support
+	UActor* SelfActor = UObject::Cast<UActor>(Self);
+	ReturnValue = SelfActor->CreateAnimChannel(UObject::Cast<UClass>(NewClass), (EAnimType)Type, RootBone, bTransient.has_value() ? bTransient.value() : false);
+}
+
+void NActor::BoneRot_BB(UObject* Self, const NameString& Bone, Rotator& ReturnValue)
+{
+	// Skeletal bone transforms are not available yet (see UActor::BonePos)
+	LogUnimplemented("Actor.BoneRot");
+	UActor* SelfActor = UObject::Cast<UActor>(Self);
+	ReturnValue = SelfActor->Rotation();
+}
+
+void NActor::IsSoftwareRendering_BB(UObject* Self, BitfieldBool& ReturnValue)
+{
+	ReturnValue = false;
+}
+
+void NActor::GetCurrentKeyState_BB(UObject* Self, uint8_t Key, BitfieldBool& ReturnValue)
+{
+	ReturnValue = engine->window ? engine->window->GetKeyState((EInputKey)Key) : false;
+}
+
+void NActor::SaveGameExists_BB(UObject* Self, BitfieldBool& ReturnValue)
+{
+	// Look for any save package in the save folder (or one folder below it)
+	ReturnValue = false;
+
+	std::error_code ec;
+	const fs::path folder = engine->packages->GetSaveFolderPath();
+	if (!fs::is_directory(folder, ec))
+		return;
+
+	const std::string ext = "." + engine->packages->GetSaveExtension();
+	for (fs::recursive_directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec))
+	{
+		if (it.depth() >= 1)
+			it.disable_recursion_pending();
+
+		if (it->is_regular_file(ec) && StrTools::equals_ignore_case(it->path().extension().string(), ext))
+		{
+			ReturnValue = true;
+			return;
+		}
+	}
+}
+
+void NActor::TraceTexture_BB(UObject* Self, const vec3& TraceEnd, const vec3& TraceStart, int& Flags, std::optional<bool> bTraceDecals, UObject*& ReturnValue)
+{
+	// Returns the texture of the first world (or mover) surface hit by the line, and its poly flags.
+	// To do: bTraceDecals
+	ReturnValue = nullptr;
+	Flags = 0;
+
+	UActor* SelfActor = UObject::Cast<UActor>(Self);
+	ULevel* level = SelfActor->XLevel();
+	if (!level || !level->Model)
+		return;
+
+	TraceFlags flags;
+	flags.world = true;
+	flags.movers = true;
+	CollisionHit hit = level->Collision.TraceFirstHit(TraceStart, TraceEnd, SelfActor, vec3(0.0f), flags);
+	if (!hit.Node)
+		return;
+
+	// Mover hits report a node of the mover's own brush model
+	UModel* model = level->Model;
+	if (hit.Actor && hit.Actor != SelfActor->Level() && hit.Actor->Brush())
+		model = hit.Actor->Brush();
+
+	if (hit.Node->Surf >= 0 && (size_t)hit.Node->Surf < model->Surfaces.size())
+	{
+		const BspSurface& surf = model->Surfaces[hit.Node->Surf];
+		ReturnValue = surf.Material;
+		Flags = (int)surf.PolyFlags;
+	}
+}
+
+void NActor::TraceWaterSurface_BB(UObject* Self, vec3& WaterSurf, const vec3& StartTrace, const vec3& EndTrace, vec3& ReturnValue)
+{
+	// Finds where the line from StartTrace to EndTrace (clipped by world geometry) crosses
+	// from water to non-water zone or the other way around.
+	ReturnValue = vec3(0.0f);
+
+	UActor* SelfActor = UObject::Cast<UActor>(Self);
+	ULevel* level = SelfActor->XLevel();
+	if (!level || !level->Model)
+		return;
+
+	TraceFlags flags;
+	flags.world = true;
+	CollisionHit hit = level->Collision.TraceFirstHit(StartTrace, EndTrace, SelfActor, vec3(0.0f), flags);
+	vec3 end = StartTrace + (EndTrace - StartTrace) * hit.Fraction;
+
+	auto isWater = [&](const vec3& pos) -> bool
+	{
+		PointRegion region = level->Model->FindRegion(pos, SelfActor->Level());
+		return region.Zone && region.Zone->bWaterZone();
+	};
+
+	bool startInWater = isWater(StartTrace);
+	float dist = length(end - StartTrace);
+	int steps = std::clamp((int)std::ceil(dist / 16.0f), 1, 512);
+
+	vec3 prev = StartTrace;
+	for (int i = 1; i <= steps; i++)
+	{
+		vec3 cur = StartTrace + (end - StartTrace) * ((float)i / (float)steps);
+		if (isWater(cur) != startInWater)
+		{
+			// Refine the crossing point
+			vec3 a = prev, b = cur;
+			for (int j = 0; j < 16; j++)
+			{
+				vec3 mid = (a + b) * 0.5f;
+				if (isWater(mid) == startInWater)
+					a = mid;
+				else
+					b = mid;
+			}
+			WaterSurf = b;
+			ReturnValue = b;
+			return;
+		}
+		prev = cur;
+	}
+}
+
+namespace
+{
+	int CurrentSongHandle_BB = 0;
+	int LastSongHandle_BB = 0;
+
+	fs::path FindChildIgnoreCase(const fs::path& folder, const std::string& name)
+	{
+		std::error_code ec;
+		fs::path direct = folder / name;
+		if (fs::exists(direct, ec))
+			return direct;
+
+		for (fs::directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec))
+		{
+			if (StrTools::equals_ignore_case(it->path().filename().string(), name))
+				return it->path();
+		}
+		return {};
+	}
+
+	// Brother Bear streams its music from Ogg files in the Music folder next to System
+	fs::path FindMusicFile_BB(std::string song)
+	{
+		std::replace(song.begin(), song.end(), '\\', '/');
+		std::string filename = fs::path(song).filename().string();
+		if (filename.empty())
+			return {};
+		if (fs::path(filename).extension().empty())
+			filename += ".ogg";
+
+		fs::path musicFolder = FindChildIgnoreCase(engine->packages->GetRootFolderPath(), "Music");
+		if (musicFolder.empty())
+			return {};
+		return FindChildIgnoreCase(musicFolder, filename);
+	}
+}
+
+void NActor::PlayMusic_BB(UObject* Self, const std::string& Song, float FadeInTime, std::optional<bool> bLoopMusic, int& ReturnValue)
+{
+	// To do: fade in, and crossfading/mixing several songs. The audio device only has a single music stream.
+	ReturnValue = 0;
+	if (Song.empty() || Song == "None" || !engine->audiodev || !engine->audiodev->GetDevice())
+		return;
+
+	fs::path path = FindMusicFile_BB(Song);
+	if (path.empty())
+	{
+		LogMessage("PlayMusic: could not find music file " + Song);
+		return;
+	}
+
+	// None of the game scripts pass bLoopMusic, so loop unless told otherwise
+	bool loop = bLoopMusic.value_or(true);
+	auto source = AudioSource::TryCreateFromFile(path.string(), loop);
+	if (!source)
+	{
+		LogMessage("PlayMusic: could not open music file " + path.string());
+		return;
+	}
+
+	// Music can be started by level scripts (triggers, cutscenes) right after a map change, before the
+	// audio device has been attached to the viewport again. Attaching it later stops all sounds and music,
+	// so attach it now.
+	if (engine->viewport && engine->viewport->Actor() && engine->audiodev->GetViewport() != engine->viewport)
+		engine->audiodev->SetViewport(engine->viewport);
+
+	engine->audiodev->GetDevice()->PlayMusic(std::move(source));
+
+	if (++LastSongHandle_BB <= 0)
+		LastSongHandle_BB = 1;
+	CurrentSongHandle_BB = LastSongHandle_BB;
+	ReturnValue = CurrentSongHandle_BB;
+}
+
+void NActor::StopMusic_BB(UObject* Self, int SongHandle, float FadeOutTime)
+{
+	// To do: fade out
+	if (SongHandle != 0 && SongHandle == CurrentSongHandle_BB)
+	{
+		if (engine->audiodev && engine->audiodev->GetDevice())
+			engine->audiodev->GetDevice()->PlayMusic(nullptr);
+		CurrentSongHandle_BB = 0;
+	}
+}
+
+void NActor::StopAllMusic_BB(UObject* Self, float FadeOutTime)
+{
+	// To do: fade out
+	if (engine->audiodev && engine->audiodev->GetDevice())
+		engine->audiodev->GetDevice()->PlayMusic(nullptr);
+	CurrentSongHandle_BB = 0;
 }

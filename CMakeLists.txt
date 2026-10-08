@@ -296,6 +296,16 @@ set(SURREALCOMMON_SOURCES
 	SurrealEngine/Native/NWebResponse.h
 	SurrealEngine/Native/NWindow.cpp
 	SurrealEngine/Native/NWindow.h
+	SurrealEngine/Native/NWind.cpp
+	SurrealEngine/Native/NWind.h
+	SurrealEngine/Native/NGesture.cpp
+	SurrealEngine/Native/NGesture.h
+	SurrealEngine/Native/NParticleFX.cpp
+	SurrealEngine/Native/NParticleFX.h
+	SurrealEngine/Native/NParticleEmitter.cpp
+	SurrealEngine/Native/NParticleEmitter.h
+	SurrealEngine/Native/NEmitterBB.cpp
+	SurrealEngine/Native/NEmitterBB.h
 	SurrealEngine/RenderDevice/RenderDevice.cpp
 	SurrealEngine/RenderDevice/RenderDevice.h
 	SurrealEngine/RenderDevice/Vulkan/BufferManager.cpp

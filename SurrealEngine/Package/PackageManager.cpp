@@ -309,6 +309,11 @@
 #include "Native/NWebRequest.h"
 #include "Native/NWebResponse.h"
 #include "Native/NWindow.h"
+#include "Native/NWind.h"
+#include "Native/NGesture.h"
+#include "Native/NParticleFX.h"
+#include "Native/NParticleEmitter.h"
+#include "Native/NEmitterBB.h"
 
 PackageManager::PackageManager(const GameLaunchInfo& launchInfo) : launchInfo(launchInfo)
 {
@@ -1108,6 +1113,14 @@ void PackageManager::RegisterFunctions()
 		NWebRequest::RegisterFunctions();
 		NWebResponse::RegisterFunctions();
 		NWindow::RegisterFunctions();
+	}
+	if (IsBrotherBear())
+	{
+		NWind::RegisterFunctions();
+		NGesture::RegisterFunctions();
+		NParticleFX::RegisterFunctions();
+		NParticleEmitter::RegisterFunctions();
+		NEmitterBB::RegisterFunctions();
 	}
 
 	if (fs::exists(gameSystemFolderPath / "RMusicPlayer.u"))
