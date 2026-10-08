@@ -2,6 +2,7 @@
 
 #include "Packages/Core/UObject.h"
 #include "Math/bbox.h"
+#include "Math/quaternion.h"
 
 class UZoneInfo;
 class UTexture;
@@ -13,6 +14,8 @@ class ULevel;
 class ULevelInfo;
 class UModel;
 class UAnimation;
+class USkeletalMesh;
+struct MeshAnimSeq;
 class UViewport;
 class USound;
 class U227SkeletalMeshInstance;
@@ -480,7 +483,7 @@ public:
 	void LoopAnim_HP(const NameString& Sequence, std::optional<float> Rate, std::optional<float> TweenTime, std::optional<float> MinRate, std::optional<EAnimType> Type, std::optional<NameString> RootBone);
 	BoundingBox GetWorldCollisionBox(bool bVisual);
 	vec3 GetRenderExtent();
-	UActor* CreateAnimChannel(UClass* NewClass, EAnimType Type, const NameString& RootBone, bool bTransient);
+	UActor* CreateAnimChannel(UClass* NewClass, EAnimType Type, const NameString& RootBone, bool bTransient, bool bNotReplaceable = false);
 	int BoneNumber(const NameString& Bone);
 	NameString BoneName(int Bone);
 	vec3 BonePos(const NameString& Bone);
@@ -576,12 +579,18 @@ public:
 		float T = -1.0f;
 	} TweenFromBlendAnimFrame[4];
 
-	// Brother Bear anim channels: actors whose animation replaces part of their owner's skeleton
+	// Brother Bear skeletal pose drawn last. KnowWonder's animations blend from it while TweenAlpha rises.
 	struct
 	{
-		int RootBone = -1; // Set on a channel
-		Array<UActor*> Channels; // Set on the channel's owner
-	} AnimChannels;
+		USkeletalMesh* Mesh = nullptr;
+		UAnimation* Anim = nullptr;
+		int AnimBone = -1;
+		int Frame = -1; // Frame number the pose was last evaluated for
+		bool Valid = false;
+		Array<int> BoneMap; // Mesh bone to animation track, or -1 when this actor doesn't animate the bone
+		Array<quaternion> Rotations;
+		Array<vec3> Positions;
+	} SkelPose;
 
 	int LastDrawFrame = -1;
 
@@ -602,6 +611,14 @@ public:
 	void SetTweenFromAnimFrame();
 	void SetTweenFromBlendAnimFrame(int slot);
 
+	// Brother Bear (KnowWonder) animation
+	bool PlayAnimKW(const NameString& sequence, bool loop, float rate, float tweenTime, float minRate, EAnimType type, NameString rootBone);
+	void TickAnimationKW(float elapsed);
+	MeshAnimSeq* FindAnimSeqKW(const NameString& sequence);
+	UActor* FindAnimChannelKW(const NameString& rootBone);
+	void StopAnimChannelsKW(int rootBone, bool allBones);
+	void RemoveAnimChannelKW(size_t index);
+
 	UTexture* GetMultiskin(int index);
 
 	void DeusExConBindEvents();
@@ -613,12 +630,14 @@ public:
 	vec3& Acceleration() { return Value<vec3>(PropOffsets_Actor.Acceleration); }
 	uint8_t& AmbientGlow() { return Value<uint8_t>(PropOffsets_Actor.AmbientGlow); }
 	USound*& AmbientSound() { return Value<USound*>(PropOffsets_Actor.AmbientSound); }
+	uint8_t& AnimBone() { return Value<uint8_t>(PropOffsets_Actor.AnimBone); }
 	float& AnimFrame() { return Value<float>(PropOffsets_Actor.AnimFrame); }
 	float& AnimLast() { return Value<float>(PropOffsets_Actor.AnimLast); }
 	float& AnimMinRate() { return Value<float>(PropOffsets_Actor.AnimMinRate); }
 	float& AnimRate() { return Value<float>(PropOffsets_Actor.AnimRate); }
 	NameString& AnimSequence() { return Value<NameString>(PropOffsets_Actor.AnimSequence); }
 	NameString& AttachTag() { return Value<NameString>(PropOffsets_Actor.AttachTag); }
+	TypedScriptArray<UActor*> AuxAnims() { return DynamicArray<UActor*>(PropOffsets_Actor.AuxAnims); }
 	UActor*& ActorBase() { return Value<UActor*>(PropOffsets_Actor.Base); }
 	UModel*& Brush() { return Value<UModel*>(PropOffsets_Actor.Brush); }
 	float& Buoyancy() { return Value<float>(PropOffsets_Actor.Buoyancy); }
@@ -704,6 +723,7 @@ public:
 	TypedScriptArray<UActor*> Touching_UT469() { return DynamicArray<UActor*>(PropOffsets_Actor.Touching); }
 	float& TransientSoundRadius() { return Value<float>(PropOffsets_Actor.TransientSoundRadius); }
 	float& TransientSoundVolume() { return Value<float>(PropOffsets_Actor.TransientSoundVolume); }
+	float& TweenAlpha() { return Value<float>(PropOffsets_Actor.TweenAlpha); }
 	float& TweenRate() { return Value<float>(PropOffsets_Actor.TweenRate); }
 	vec3& Velocity() { return Value<vec3>(PropOffsets_Actor.Velocity); }
 	float& VisibilityHeight() { return Value<float>(PropOffsets_Actor.VisibilityHeight); }
@@ -718,7 +738,10 @@ public:
 	BitfieldBool bAnimByOwner() { return BoolValue(PropOffsets_Actor.bAnimByOwner); }
 	BitfieldBool bAnimFinished() { return BoolValue(PropOffsets_Actor.bAnimFinished); }
 	BitfieldBool bAnimLoop() { return BoolValue(PropOffsets_Actor.bAnimLoop); }
+	BitfieldBool bAnimMove() { return BoolValue(PropOffsets_Actor.bAnimMove); }
+	BitfieldBool bAnimNotReplaceable() { return BoolValue(PropOffsets_Actor.bAnimNotReplaceable); }
 	BitfieldBool bAnimNotify() { return BoolValue(PropOffsets_Actor.bAnimNotify); }
+	BitfieldBool bAnimTransient() { return BoolValue(PropOffsets_Actor.bAnimTransient); }
 	BitfieldBool bAssimilated() { return BoolValue(PropOffsets_Actor.bAssimilated); }
 	BitfieldBool bBlockActors() { return BoolValue(PropOffsets_Actor.bBlockActors); }
 	BitfieldBool bBlockPlayers() { return BoolValue(PropOffsets_Actor.bBlockPlayers); }

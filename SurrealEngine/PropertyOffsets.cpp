@@ -299,6 +299,7 @@ static void InitPropertyOffsets_Actor(PackageManager* packages)
 	PropOffsets_Actor.Acceleration = cls->GetPropertyDataOffset("Acceleration");
 	PropOffsets_Actor.AmbientGlow = cls->GetPropertyDataOffset("AmbientGlow");
 	PropOffsets_Actor.AmbientSound = cls->GetPropertyDataOffset("AmbientSound");
+	PropOffsets_Actor.AnimBone = cls->GetPropertyDataOffset("AnimBone");
 	PropOffsets_Actor.AnimFrame = cls->GetPropertyDataOffset("AnimFrame");
 	PropOffsets_Actor.AnimLast = cls->GetPropertyDataOffset("AnimLast");
 	PropOffsets_Actor.AnimMinRate = cls->GetPropertyDataOffset("AnimMinRate");
@@ -309,6 +310,7 @@ static void InitPropertyOffsets_Actor(PackageManager* packages)
 	PropOffsets_Actor.BlendAnimRate = cls->GetPropertyDataOffset("BlendAnimRate");
 	PropOffsets_Actor.BlendTweenRate = cls->GetPropertyDataOffset("BlendTweenRate");
 	PropOffsets_Actor.AttachTag = cls->GetPropertyDataOffset("AttachTag");
+	PropOffsets_Actor.AuxAnims = cls->GetPropertyDataOffset("AuxAnims");
 	PropOffsets_Actor.Base = cls->GetPropertyDataOffset("Base");
 	PropOffsets_Actor.Brush = cls->GetPropertyDataOffset("Brush");
 	PropOffsets_Actor.Buoyancy = cls->GetPropertyDataOffset("Buoyancy");
@@ -393,6 +395,7 @@ static void InitPropertyOffsets_Actor(PackageManager* packages)
 	PropOffsets_Actor.Touching = cls->GetPropertyDataOffset("Touching");
 	PropOffsets_Actor.TransientSoundRadius = cls->GetPropertyDataOffset("TransientSoundRadius");
 	PropOffsets_Actor.TransientSoundVolume = cls->GetPropertyDataOffset("TransientSoundVolume");
+	PropOffsets_Actor.TweenAlpha = cls->GetPropertyDataOffset("TweenAlpha");
 	PropOffsets_Actor.TweenRate = cls->GetPropertyDataOffset("TweenRate");
 	PropOffsets_Actor.Velocity = cls->GetPropertyDataOffset("Velocity");
 	PropOffsets_Actor.VisibilityHeight = cls->GetPropertyDataOffset("VisibilityHeight");
@@ -407,6 +410,9 @@ static void InitPropertyOffsets_Actor(PackageManager* packages)
 	PropOffsets_Actor.bAnimByOwner = cls->GetPropertyDataOffset("bAnimByOwner");
 	PropOffsets_Actor.bAnimFinished = cls->GetPropertyDataOffset("bAnimFinished");
 	PropOffsets_Actor.bAnimLoop = cls->GetPropertyDataOffset("bAnimLoop");
+	PropOffsets_Actor.bAnimMove = cls->GetPropertyDataOffset("bAnimMove");
+	PropOffsets_Actor.bAnimNotReplaceable = cls->GetPropertyDataOffset("bAnimNotReplaceable");
+	PropOffsets_Actor.bAnimTransient = cls->GetPropertyDataOffset("bAnimTransient");
 	PropOffsets_Actor.bAnimNotify = cls->GetPropertyDataOffset("bAnimNotify");
 	PropOffsets_Actor.bAssimilated = cls->GetPropertyDataOffset("bAssimilated");
 	PropOffsets_Actor.bBlockActors = cls->GetPropertyDataOffset("bBlockActors");

@@ -252,6 +252,7 @@ struct PropertyOffsets_Actor
 	PropertyDataOffset Acceleration;
 	PropertyDataOffset AmbientGlow;
 	PropertyDataOffset AmbientSound;
+	PropertyDataOffset AnimBone;
 	PropertyDataOffset AnimFrame;
 	PropertyDataOffset AnimLast;
 	PropertyDataOffset AnimMinRate;
@@ -262,6 +263,7 @@ struct PropertyOffsets_Actor
 	PropertyDataOffset BlendAnimRate;
 	PropertyDataOffset BlendTweenRate;
 	PropertyDataOffset AttachTag;
+	PropertyDataOffset AuxAnims;
 	PropertyDataOffset Base;
 	PropertyDataOffset Brush;
 	PropertyDataOffset Buoyancy;
@@ -346,6 +348,7 @@ struct PropertyOffsets_Actor
 	PropertyDataOffset Touching;
 	PropertyDataOffset TransientSoundRadius;
 	PropertyDataOffset TransientSoundVolume;
+	PropertyDataOffset TweenAlpha;
 	PropertyDataOffset TweenRate;
 	PropertyDataOffset Velocity;
 	PropertyDataOffset VisibilityHeight;
@@ -360,7 +363,10 @@ struct PropertyOffsets_Actor
 	PropertyDataOffset bAnimByOwner;
 	PropertyDataOffset bAnimFinished;
 	PropertyDataOffset bAnimLoop;
+	PropertyDataOffset bAnimMove;
+	PropertyDataOffset bAnimNotReplaceable;
 	PropertyDataOffset bAnimNotify;
+	PropertyDataOffset bAnimTransient;
 	PropertyDataOffset bAssimilated;
 	PropertyDataOffset bBlockActors;
 	PropertyDataOffset bBlockPlayers;

@@ -128,7 +128,23 @@ bool UActor::Destroy()
 
 	engine->audiodev->ActorDestroyed(this);
 	if (engine->LaunchInfo.IsBrotherBear())
+	{
 		EmitterBB::Remove(this);
+
+		// An anim channel leaves its owner's AuxAnims
+		if (AnimBone() != 0 && Owner())
+		{
+			auto channels = Owner()->AuxAnims();
+			for (size_t i = 0; i < channels.size(); i++)
+			{
+				if (channels[i] == this)
+				{
+					channels.Array->Remove(i, 1);
+					break;
+				}
+			}
+		}
+	}
 
 	ULevel* level = XLevel();
 

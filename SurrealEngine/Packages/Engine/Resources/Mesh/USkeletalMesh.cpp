@@ -2,6 +2,7 @@
 #include "Precomp.h"
 #include "USkeletalMesh.h"
 #include "Packages/Engine/Resources/Mesh/UAnimation.h"
+#include "Packages/Engine/Actors/UActor.h"
 #include "Engine.h"
 #include <algorithm>
 #include <cstring>
@@ -108,163 +109,192 @@ void USkeletalMesh::Load(ObjectStream* stream)
 	}
 }
 
-const Array<int>& USkeletalMesh::GetAnimBoneMap(UAnimation* anim)
+// Finds the keys around a time. Past the last key a track wraps around to its first key, which it reaches at the end of the track.
+static void FindKeys(const Array<float>& times, float time, float trackTime, int& key0, int& key1, float& t)
 {
-	auto it = AnimBoneMaps.find(anim);
-	if (it != AnimBoneMaps.end())
-		return it->second;
-
-	Array<int>& map = AnimBoneMaps[anim];
-	map.resize(RefSkeleton.size(), -1);
-	for (size_t i = 0; i < RefSkeleton.size(); i++)
-	{
-		for (size_t j = 0; j < anim->RefBones.size(); j++)
-		{
-			if (anim->RefBones[j].Name == RefSkeleton[i].Name)
-			{
-				map[i] = (int)j;
-				break;
-			}
-		}
-	}
-	return map;
-}
-
-static void FindKeys(const Array<float>& times, float time, int& key0, int& key1, float& t)
-{
-	key0 = 0;
-	key1 = 0;
-	t = 0.0f;
-	if (times.size() < 2 || time <= times.front())
-		return;
-	if (time >= times.back())
-	{
-		key0 = key1 = (int)times.size() - 1;
-		return;
-	}
 	key1 = (int)(std::upper_bound(times.begin(), times.end(), time) - times.begin());
+	if (key1 == 0)
+	{
+		key0 = 0;
+		t = 0.0f;
+		return;
+	}
+
 	key0 = key1 - 1;
-	float span = times[key1] - times[key0];
-	t = span > 0.0f ? (time - times[key0]) / span : 0.0f;
+	float time0 = times[key0];
+	float time1;
+	if (key1 == (int)times.size())
+	{
+		key1 = 0;
+		time1 = trackTime;
+	}
+	else
+	{
+		time1 = times[key1];
+	}
+	t = time1 > time0 ? std::clamp((time - time0) / (time1 - time0), 0.0f, 1.0f) : 0.0f;
 }
 
-static quaternion SampleRotation(const AnimTrack& track, float time)
+static quaternion SampleRotation(const AnimTrack& track, float time, float trackTime)
 {
 	if (track.KeyQuat.size() < 2 || track.KeyQuat.size() != track.KeyTime.size())
 		return track.KeyQuat.front();
 	int key0, key1;
 	float t;
-	FindKeys(track.KeyTime, time, key0, key1, t);
-	const quaternion& a = track.KeyQuat[key0];
-	quaternion b = track.KeyQuat[key1];
-	if (a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0.0f)
-		b = quaternion(-b.x, -b.y, -b.z, -b.w);
-	quaternion q(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t);
-	float len = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
-	return len > 0.0f ? quaternion(q.x / len, q.y / len, q.z / len, q.w / len) : a;
+	FindKeys(track.KeyTime, time, trackTime, key0, key1, t);
+	return slerp(track.KeyQuat[key0], track.KeyQuat[key1], t);
 }
 
-static vec3 SamplePosition(const AnimTrack& track, float time)
+static vec3 SamplePosition(const AnimTrack& track, float time, float trackTime)
 {
 	if (track.KeyPos.size() < 2 || track.KeyPos.size() != track.KeyTime.size())
 		return track.KeyPos.front();
 	int key0, key1;
 	float t;
-	FindKeys(track.KeyTime, time, key0, key1, t);
+	FindKeys(track.KeyTime, time, trackTime, key0, key1, t);
 	return mix(track.KeyPos[key0], track.KeyPos[key1], t);
 }
 
-bool USkeletalMesh::IsBoneInSubtree(int bone, int rootBone) const
+void USkeletalMesh::ApplyAnim(UActor* actor, UActor* target)
 {
-	while (true)
-	{
-		if (bone == rootBone)
-			return true;
-		int parent = (int)RefSkeleton[bone].ParentIndex;
-		if (bone == 0 || parent >= bone)
-			return false;
-		bone = parent;
-	}
-}
+	auto& pose = actor->SkelPose;
+	auto& targetPose = target->SkelPose;
+	size_t boneCount = RefSkeleton.size();
+	bool isChannel = actor != target;
 
-void USkeletalMesh::GetPose(const SkeletalAnimLayer* layers, int layerCount, Array<vec3>& outPoints, Array<vec3>& outNormals)
-{
-	// Find the animation move for each layer's sequence
-	struct LayerMove
+	if (pose.Mesh != this || pose.Rotations.size() != boneCount)
 	{
-		const AnimMove* Move = nullptr;
-		const Array<int>* BoneMap = nullptr;
-		float Time = 0.0f;
-		int RootBone = -1;
-	};
-	LayerMove moves[8];
-	int moveCount = 0;
-	for (int l = 0; l < layerCount && moveCount < 8; l++)
-	{
-		const SkeletalAnimLayer& layer = layers[l];
-		UAnimation* anim = layer.Anim;
-		if (!anim || anim->Moves.empty() || (layer.RootBone >= (int)RefSkeleton.size()))
-			continue;
-
-		size_t seqIndex = 0;
-		for (size_t i = 0; i < anim->AnimSeqs.size(); i++)
+		pose.Mesh = this;
+		pose.Anim = nullptr;
+		pose.AnimBone = -1;
+		pose.Valid = false;
+		pose.Rotations.resize(boneCount);
+		pose.Positions.resize(boneCount);
+		for (size_t i = 0; i < boneCount; i++)
 		{
-			if (anim->AnimSeqs[i].Name == layer.Sequence)
+			pose.Rotations[i] = RefSkeleton[i].Orientation;
+			pose.Positions[i] = RefSkeleton[i].Position;
+		}
+	}
+
+	if (!actor->SkelAnim())
+		actor->SkelAnim() = DefaultAnimation;
+	UAnimation* anim = actor->SkelAnim();
+
+	// Moves[i] holds the keys of the sequence at index i
+	const AnimMove* move = nullptr;
+	if (anim && !actor->AnimSequence().IsNone())
+	{
+		for (size_t i = 0; i < anim->AnimSeqs.size() && i < anim->Moves.size(); i++)
+		{
+			if (anim->AnimSeqs[i].Name == actor->AnimSequence())
 			{
-				seqIndex = i;
+				move = &anim->Moves[i];
 				break;
 			}
 		}
-		if (seqIndex >= anim->Moves.size())
-			continue;
+	}
 
-		// To do: tween from the previous pose while AnimFrame is negative
-		LayerMove& move = moves[moveCount++];
-		move.Move = &anim->Moves[seqIndex];
-		move.BoneMap = &GetAnimBoneMap(anim);
-		move.Time = std::max(layer.AnimFrame, 0.0f) * move.Move->TrackTime;
-		move.RootBone = layer.RootBone;
+	if (!move)
+	{
+		// A channel without an animation leaves its bones alone. Otherwise the skeleton goes back to its reference pose.
+		if (isChannel)
+			return;
+		for (size_t i = 0; i < boneCount; i++)
+		{
+			pose.Rotations[i] = RefSkeleton[i].Orientation;
+			pose.Positions[i] = RefSkeleton[i].Position;
+		}
+		pose.Anim = nullptr;
+	}
+	else if (!move->AnimTracks.empty())
+	{
+		int animBone = isChannel ? actor->AnimBone() : -1;
+		if (pose.Anim != anim || pose.AnimBone != animBone)
+		{
+			// Animation tracks match the mesh bones by name. A channel only moves the bones from its AnimBone to AnimBone + NumChildren.
+			pose.Anim = anim;
+			pose.AnimBone = animBone;
+			pose.BoneMap.resize(boneCount);
+			for (size_t i = 0; i < boneCount; i++)
+			{
+				pose.BoneMap[i] = -1;
+				if (isChannel && ((size_t)animBone >= boneCount || (int)i < animBone || (int)i > animBone + (int)RefSkeleton[animBone].NumChildren))
+					continue;
+				for (size_t j = 0; j < anim->RefBones.size() && j < move->AnimTracks.size(); j++)
+				{
+					if (anim->RefBones[j].Name == RefSkeleton[i].Name)
+					{
+						pose.BoneMap[i] = (int)j;
+						break;
+					}
+				}
+			}
+		}
+
+		// While tweening, blend from the pose drawn last time
+		float time = std::clamp(actor->AnimFrame(), 0.0f, 1.0f) * move->TrackTime;
+		float blend = (pose.Valid && actor->TweenRate() != 0.0f) ? 1.0f - actor->TweenAlpha() : 0.0f;
+
+		for (size_t i = 0; i < boneCount; i++)
+		{
+			int trackIndex = pose.BoneMap[i];
+			if (trackIndex < 0 && isChannel)
+				continue;
+
+			quaternion rotation = RefSkeleton[i].Orientation;
+			vec3 position = RefSkeleton[i].Position;
+			if (trackIndex >= 0)
+			{
+				const AnimTrack& track = move->AnimTracks[trackIndex];
+				if (!track.KeyQuat.empty())
+					rotation = SampleRotation(track, time, move->TrackTime);
+				if (!track.KeyPos.empty())
+					position = SamplePosition(track, time, move->TrackTime);
+			}
+
+			if (blend != 0.0f)
+			{
+				rotation = slerp(rotation, pose.Rotations[i], blend);
+				position = mix(position, pose.Positions[i], blend);
+			}
+
+			pose.Rotations[i] = rotation;
+			pose.Positions[i] = position;
+			if (isChannel && targetPose.Rotations.size() == boneCount)
+			{
+				targetPose.Rotations[i] = rotation;
+				targetPose.Positions[i] = position;
+			}
+		}
+	}
+	pose.Valid = true;
+
+	// Channels apply their animations over the actor's, in order
+	if (!isChannel && PropOffsets_Actor.AuxAnims.DataOffset != ~(size_t)0)
+	{
+		for (UActor* channel : actor->AuxAnims())
+		{
+			if (channel && !channel->bDeleteMe())
+				ApplyAnim(channel, actor);
+		}
+	}
+}
+
+void USkeletalMesh::GetPose(UActor* actor, int frame, Array<vec3>& outPoints, Array<vec3>& outNormals)
+{
+	if (actor->SkelPose.Mesh != this || actor->SkelPose.Frame != frame)
+	{
+		ApplyAnim(actor, actor);
+		actor->SkelPose.Frame = frame;
 	}
 
 	// Bone transforms in mesh space. Each bone's rotation and position are relative to its parent.
 	BoneTransforms.resize(RefSkeleton.size());
 	for (size_t i = 0; i < RefSkeleton.size(); i++)
 	{
-		quaternion q = RefSkeleton[i].Orientation;
-		vec3 p = RefSkeleton[i].Position;
-
-		for (int l = 0; l < moveCount; l++)
-		{
-			const LayerMove& move = moves[l];
-			if (move.RootBone != -1 && !IsBoneInSubtree((int)i, move.RootBone))
-				continue;
-
-			int animBone = (*move.BoneMap)[i];
-			if (animBone == -1)
-				continue;
-
-			int trackIndex = animBone;
-			if (!move.Move->BoneIndices.empty())
-			{
-				trackIndex = -1;
-				for (size_t j = 0; j < move.Move->BoneIndices.size(); j++)
-				{
-					if (move.Move->BoneIndices[j] == (uint32_t)animBone)
-					{
-						trackIndex = (int)j;
-						break;
-					}
-				}
-			}
-			if (trackIndex >= 0 && (size_t)trackIndex < move.Move->AnimTracks.size())
-			{
-				const AnimTrack& track = move.Move->AnimTracks[trackIndex];
-				if (!track.KeyQuat.empty())
-					q = SampleRotation(track, move.Time);
-				if (!track.KeyPos.empty())
-					p = SamplePosition(track, move.Time);
-			}
-		}
+		const quaternion& q = actor->SkelPose.Rotations[i];
+		const vec3& p = actor->SkelPose.Positions[i];
 
 		float x2 = q.x + q.x, y2 = q.y + q.y, z2 = q.z + q.z;
 		float xx = q.x * x2, yy = q.y * y2, zz = q.z * z2;

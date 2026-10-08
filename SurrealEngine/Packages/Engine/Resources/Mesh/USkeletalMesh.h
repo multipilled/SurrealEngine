@@ -2,6 +2,8 @@
 
 #include "ULodMesh.h"
 
+class UActor;
+
 struct ExtMeshWedge
 {
 	uint16_t Vertex;
@@ -36,15 +38,6 @@ struct BoneWeight
 	uint16_t BoneWeight;
 };
 
-// One animation applied to a skeleton: the actor's own animation, or an anim channel that replaces part of the skeleton
-struct SkeletalAnimLayer
-{
-	UAnimation* Anim = nullptr;
-	NameString Sequence;
-	float AnimFrame = 0.0f; // The actor's AnimFrame: 0 to 1 over the sequence, negative while tweening into it
-	int RootBone = -1; // Bones affected: this bone and its children, or all bones when -1
-};
-
 class USkeletalMesh : public ULodMesh
 {
 public:
@@ -53,9 +46,9 @@ public:
 	void Load(ObjectStream* stream) override;
 	void Save(PackageStreamWriter* stream) override;
 
-	// Skins the mesh with KnowWonder animations. Later layers replace earlier ones on the bones they affect.
-	// Bones no layer animates keep the reference pose.
-	void GetPose(const SkeletalAnimLayer* layers, int layerCount, Array<vec3>& outPoints, Array<vec3>& outNormals);
+	// Skins the mesh with an actor's KnowWonder animation and the anim channels in its AuxAnims.
+	// The pose is evaluated once per frame number.
+	void GetPose(UActor* actor, int frame, Array<vec3>& outPoints, Array<vec3>& outNormals);
 
 	Array<ExtMeshWedge> ExtWedges;
 	Array<vec3> Points;
@@ -83,9 +76,8 @@ private:
 		vec3 t;
 	};
 
-	const Array<int>& GetAnimBoneMap(UAnimation* anim);
-	bool IsBoneInSubtree(int bone, int rootBone) const;
+	// Poses an actor's bones (into actor->SkelPose) and, for an anim channel, its owner's (target) bones too
+	void ApplyAnim(UActor* actor, UActor* target);
 
-	std::map<UAnimation*, Array<int>> AnimBoneMaps; // Mesh bone to animation bone, per animation
 	Array<BoneTransform> BoneTransforms;
 };
