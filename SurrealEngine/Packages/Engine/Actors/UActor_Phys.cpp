@@ -64,6 +64,10 @@ bool UActor::SetLocation(const vec3& newLocation)
 
 	if (Level()->bBegunPlay())
 	{
+		UpdateActorZone();
+		if (bDeleteMe())
+			return true;
+
 		// Send touch notifications for anything at the new location
 		for (UActor* actor : XLevel()->Collision.CollidingActors(Location(), CollisionHeight(), CollisionRadius()))
 		{

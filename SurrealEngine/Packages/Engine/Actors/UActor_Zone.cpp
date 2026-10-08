@@ -12,9 +12,14 @@ PointRegion UActor::FindRegion(const vec3& offset)
 	return XLevel()->Model->FindRegion(Location() + offset, Level());
 }
 
-void UActor::InitActorZone()
+void UActor::RefreshActorZone()
 {
 	Region() = FindRegion();
+}
+
+void UActor::InitActorZone()
+{
+	RefreshActorZone();
 	if (Region().Zone->bWaterZone() && !this->IsA("Projectile"))
 	{
 		SetPhysics(PHYS_Swimming);

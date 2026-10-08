@@ -384,6 +384,8 @@ public:
 	void RelinkBasedActor();
 	void SetOwner(UActor* newOwner);
 	virtual void InitActorZone();
+	// Sets the actor's regions from its location without sending any zone events
+	virtual void RefreshActorZone();
 	virtual void UpdateActorZone();
 	PointRegion FindRegion(const vec3& offset = vec3(0.0f));
 

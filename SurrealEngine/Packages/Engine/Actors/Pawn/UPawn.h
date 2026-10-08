@@ -18,7 +18,7 @@ public:
 	void Tick(float elapsed) override;
 	void TickRotating(float elapsed) override;
 
-	void InitActorZone() override;
+	void RefreshActorZone() override;
 	void UpdateActorZone() override;
 
 	void MoveTo(const vec3& newDestination, float speed);
