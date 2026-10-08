@@ -534,7 +534,7 @@ void VulkanRenderDevice::DrawGouraudPolygon(SceneNode* Frame, TextureInfo& Info,
 				vertex->Color.r = P->Light.x;
 				vertex->Color.g = P->Light.y;
 				vertex->Color.b = P->Light.z;
-				vertex->Color.a = 1.0f;
+				vertex->Color.a = P->Alpha;
 				vertex->TextureBinds = textureBinds;
 				vertex++;
 			}

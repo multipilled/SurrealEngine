@@ -135,6 +135,8 @@ set(SURREALCOMMON_SOURCES
 	SurrealEngine/Render/VisiblePortal.h
 	SurrealEngine/Render/VisibleSprite.cpp
 	SurrealEngine/Render/VisibleSprite.h
+	SurrealEngine/Render/VisibleEmitter.cpp
+	SurrealEngine/Render/VisibleEmitter.h
 	SurrealEngine/Render/VisibleTranslucent.h
 	SurrealEngine/Render/RenderSubsystem.cpp
 	SurrealEngine/Render/RenderSubsystem.h
@@ -522,6 +524,8 @@ set(SURREALCOMMON_SOURCES
 	SurrealEngine/Packages/Engine/USurrealClient.cpp
 	SurrealEngine/Packages/Engine/USurrealClient.h
 	SurrealEngine/Packages/Engine/UViewport.h
+	SurrealEngine/Packages/Engine/Actors/EmitterBB.cpp
+	SurrealEngine/Packages/Engine/Actors/EmitterBB.h
 	SurrealEngine/Packages/Engine/Actors/UActor.cpp
 	SurrealEngine/Packages/Engine/Actors/UActor.h
 	SurrealEngine/Packages/Engine/Actors/UActor_Animation.cpp

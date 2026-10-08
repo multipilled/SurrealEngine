@@ -1,6 +1,7 @@
 #include "Precomp.h"
 #include "NEmitterBB.h"
-#include "NParticleEmitter.h"
+#include "Packages/Engine/Actors/UActor.h"
+#include "Packages/Engine/Actors/EmitterBB.h"
 #include "VM/NativeFunc.h"
 #include "Utils/Logger.h"
 
@@ -13,7 +14,7 @@ void NEmitterBB::RegisterFunctions()
 
 void NEmitterBB::Kill(UObject* Self)
 {
-	LogUnimplemented("Emitter.Kill");
+	EmitterBB::Kill(UObject::Cast<UActor>(Self));
 }
 
 void NEmitterBB::AddParticleEmitter(UObject* Self, uint8_t Type)
@@ -23,12 +24,5 @@ void NEmitterBB::AddParticleEmitter(UObject* Self, uint8_t Type)
 
 void NEmitterBB::TriggerParticleEmitters(UObject* Self)
 {
-	// Pass the trigger on to every sub-emitter this actor owns
-	int count = clamp((int)Self->GetInt("iNumEmitters"), 0, 4);
-	UObject** emitters = static_cast<UObject**>(Self->GetProperty("Emitters"));
-	for (int i = 0; i < count; i++)
-	{
-		if (emitters[i])
-			NParticleEmitter::Trigger(emitters[i]);
-	}
+	EmitterBB::Trigger(UObject::Cast<UActor>(Self));
 }

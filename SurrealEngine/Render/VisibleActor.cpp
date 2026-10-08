@@ -5,6 +5,8 @@
 #include "VisibleBrush.h"
 #include "VisibleMesh.h"
 #include "VisibleSprite.h"
+#include "VisibleEmitter.h"
+#include "Packages/Engine/Actors/EmitterBB.h"
 #include "Packages/Engine/UViewport.h"
 #include "Packages/Engine/Actors/Pawn/UPawn.h"
 #include "Packages/Engine/Actors/Pawn/UPlayerPawn.h"
@@ -75,6 +77,12 @@ void VisibleActor::Process(VisibleFrame* frame, UActor* actor)
 		Actor = actor;
 		frame->Actors.push_back(*this);
 	}
+	else if (dt == (EDrawType)DT_Emitter_BB && engine->LaunchInfo.IsBrotherBear())
+	{
+		Type = dt;
+		Actor = actor;
+		frame->Actors.push_back(*this);
+	}
 }
 
 void VisibleActor::DrawOpaque(VisibleFrame* frame)
@@ -103,6 +111,12 @@ void VisibleActor::DrawOpaque(VisibleFrame* frame)
 			frame->Translucents.emplace_back(*this, dot(v, v));
 		}
 	}
+	else if (Type == (EDrawType)DT_Emitter_BB)
+	{
+		// Particles are drawn with the translucent actors, sorted by the emitter's location
+		vec3 v = Actor->Location() - frame->ViewLocation.xyz();
+		frame->Translucents.emplace_back(*this, dot(v, v));
+	}
 }
 
 void VisibleActor::DrawTranslucent(VisibleFrame* frame)
@@ -121,5 +135,10 @@ void VisibleActor::DrawTranslucent(VisibleFrame* frame)
 	{
 		VisibleBrush visbrush;
 		visbrush.Draw(frame, Actor, true);
+	}
+	else if (Type == (EDrawType)DT_Emitter_BB)
+	{
+		VisibleEmitter visemitter;
+		visemitter.Draw(frame, Actor);
 	}
 }

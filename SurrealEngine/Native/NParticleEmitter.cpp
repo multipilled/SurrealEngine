@@ -3,7 +3,8 @@
 #include "VM/NativeFunc.h"
 #include "Utils/Logger.h"
 
-// There is no simulation for Brother Bear's sub-emitters yet, so these only report themselves as unimplemented.
+// Brother Bear never creates these objects (an emitter actor's Emitters array stays empty). Its particles are simulated by
+// EmitterBB instead, so these only report themselves as unimplemented.
 
 void NParticleEmitter::RegisterFunctions()
 {

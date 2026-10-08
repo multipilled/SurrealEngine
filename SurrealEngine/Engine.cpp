@@ -19,6 +19,7 @@
 #include "Packages/Engine/UViewport.h"
 #include "Packages/Engine/UCanvas.h"
 #include "Packages/Engine/Actors/UActor.h"
+#include "Packages/Engine/Actors/EmitterBB.h"
 #include "Packages/Engine/Actors/Pawn/UPlayerPawn.h"
 #include "Packages/Engine/Actors/Info/ULevelInfo.h"
 #include "Packages/Engine/Actors/Info/UGameInfo.h"
@@ -652,6 +653,7 @@ void Engine::UnloadMap()
 	Level = nullptr;
 	viewport->Actor() = nullptr;
 	dxRootWindow = nullptr;
+	EmitterBB::RemoveAll();
 	packages->UnloadPackage(std::move(LevelPackage));
 
 	// GC::Collect();
