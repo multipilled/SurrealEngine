@@ -275,6 +275,30 @@ std::pair<bool, vec3> UActor::CheckLocation(vec3 location, float radius, float h
 			}
 		}
 	}
+
+	if (!found)
+	{
+		// The spot may be sunk into the floor deeper than the search above reaches (Brother Bear spawns Koda
+		// 40 units below Kenai's center). Drop the cylinder onto the floor from above the spot instead.
+		for (float lift : { height, height * 2.0f })
+		{
+			vec3 start = location + vec3(0.0f, 0.0f, lift);
+			if (!XLevel()->Collision.OverlapTest(start, height, radius, false, true, false).empty())
+				continue;
+
+			float fraction = 1.0f;
+			for (const CollisionHit& hit : XLevel()->Collision.Trace(start, location, height, radius, false, true, false))
+				fraction = std::min(fraction, hit.Fraction);
+
+			vec3 testlocation = start + (location - start) * std::max(fraction - 0.01f, 0.0f);
+			if (XLevel()->Collision.OverlapTest(testlocation, height, radius, false, true, false).empty())
+			{
+				location = testlocation;
+				found = true;
+				break;
+			}
+		}
+	}
 	return { found, location };
 }
 
