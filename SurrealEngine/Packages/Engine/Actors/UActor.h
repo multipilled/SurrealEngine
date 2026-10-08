@@ -397,6 +397,7 @@ public:
 	void TickProjectile(float elapsed);
 	void TickRolling(float elapsed);
 	void TickInterpolating(float elapsed);
+	void TickInterpolatingKnowWonder(float elapsed);
 	void TickMovingBrush(float elapsed);
 	void TickSpider(float elapsed);
 	void TickTrailer(float elapsed);
