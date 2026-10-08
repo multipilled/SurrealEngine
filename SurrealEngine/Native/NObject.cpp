@@ -680,6 +680,20 @@ void NObject::Dot_QuatQuat_U227(quaternion& A, quaternion& B, float& ReturnValue
 	ReturnValue = dot(vec3{A.x, A.y, A.z}, vec3{B.x, B.y, B.z});
 }
 
+// Object names may include a group path, as in "Package.Group.Object"
+static UObject* FindDynamicObject(const std::string& packageName, const std::string& objectName, UObject* objectClass)
+{
+	Package* package = engine->packages->GetPackage(packageName);
+	auto grouppos = objectName.find_last_of('.');
+	if (grouppos == std::string::npos)
+		return package->GetUObject(objectClass->Name, objectName);
+
+	UObject* obj = package->GetUObject(objectClass->Name, objectName.substr(grouppos + 1), objectName.substr(0, grouppos), false);
+	if (!obj) // fall back to ignoring the group
+		obj = package->GetUObject(objectClass->Name, objectName.substr(grouppos + 1));
+	return obj;
+}
+
 void NObject::DynamicLoadObject(const std::string& ObjectName, UObject* ObjectClass, std::optional<bool> MayFail, UObject*& ReturnValue)
 {
 	ReturnValue = nullptr;
@@ -694,7 +708,7 @@ void NObject::DynamicLoadObject(const std::string& ObjectName, UObject* ObjectCl
 
 			try
 			{
-				ReturnValue = engine->packages->GetPackage(packageName)->GetUObject(ObjectClass->Name, objectName);
+				ReturnValue = FindDynamicObject(packageName, objectName, ObjectClass);
 			}
 			catch (...)
 			{
@@ -722,7 +736,7 @@ void NObject::DynamicLoadObject_219(const std::string& ObjectName, UObject* Obje
 
 			try
 			{
-				ReturnValue = engine->packages->GetPackage(packageName)->GetUObject(ObjectClass->Name, objectName);
+				ReturnValue = FindDynamicObject(packageName, objectName, ObjectClass);
 			}
 			catch (...)
 			{
