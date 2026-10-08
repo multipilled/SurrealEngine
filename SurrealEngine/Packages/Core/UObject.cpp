@@ -34,6 +34,8 @@ void UObject::LoadNow()
 			if (traceLoad)
 				fprintf(stderr, "[load] %s #%d %s (%s)\n", info->package->GetPackageName().ToString().c_str(), info->Index, info->ObjName.ToString().c_str(), info->Class ? info->Class->Name.ToString().c_str() : "Class");
 			Load(stream.get());
+			if (traceLoad && stream->BytesLeft() != 0)
+				fprintf(stderr, "[load] %s #%d %s left %u unread bytes\n", info->package->GetPackageName().ToString().c_str(), info->Index, info->ObjName.ToString().c_str(), stream->BytesLeft());
 			SetObject("Outer", info->Outer);
 		}
 		else if (auto s = UObject::TryCast<UStruct>(this))

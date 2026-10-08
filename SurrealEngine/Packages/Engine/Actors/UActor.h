@@ -117,7 +117,8 @@ enum ELightEffect
 	LE_Interference,
 	LE_Cylinder,
 	LE_Rotor,
-	LE_Unused
+	LE_Unused,
+	LE_Sunlight // Brother Bear (KnowWonder): directional light along the actor's rotation
 };
 
 enum EDrawType

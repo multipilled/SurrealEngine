@@ -276,6 +276,13 @@ void LightSystem::InitVertexLight(VertexLight& out, UActor* actor, UZoneInfo* zo
 		out.Lights[lightIndex].Color = LightmapBuilder::GetLightColor(light);
 		float invRadius = 1.0f / light->WorldLightRadius();
 		out.Lights[lightIndex].InvRadiusSquared = invRadius * invRadius;
+		out.Lights[lightIndex].Directional = light->LightEffect() == LE_Sunlight;
+		if (out.Lights[lightIndex].Directional)
+		{
+			vec3 forward, right, up;
+			Coords::Rotation(light->Rotation()).GetAxes(forward, right, up);
+			out.Lights[lightIndex].Direction = -forward;
+		}
 		lightIndex++;
 		if (lightIndex == VertexLight::MaxLights)
 			break;
