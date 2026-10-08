@@ -90,6 +90,8 @@ set(SURREALCOMMON_SOURCES
 	SurrealEngine/Commandlet/Native/NativeCppUpdater.cpp
 	SurrealEngine/Commandlet/Native/NativeCppUpdater.h
 	SurrealEngine/Commandlet/QuitCommandlet.cpp
+	SurrealEngine/Commandlet/NativeAuditCommandlet.cpp
+	SurrealEngine/Commandlet/NativeAuditCommandlet.h
 	SurrealEngine/Commandlet/QuitCommandlet.h
 	SurrealEngine/Commandlet/RunCommandlet.cpp
 	SurrealEngine/Commandlet/RunCommandlet.h

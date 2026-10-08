@@ -32,6 +32,19 @@ public:
 	NameString Format;
 	Array<uint8_t> Data;
 
+	// KnowWonder (Brother Bear) stores a sound header ahead of the data and,
+	// for dialog lines, a trailing block that is likely lip sync data.
+	struct KnowWonderSoundInfo
+	{
+		uint32_t Flags = 0;
+		float Duration = 0.0f;
+		uint32_t SampleCount = 0;
+		uint32_t BitsPerSample = 0;
+		uint32_t Channels = 0;
+		uint32_t SampleRate = 0;
+	} KWInfo;
+	Array<uint8_t> KWTrailer;
+
 	Array<float> samples;
 	float duration = 0.0f;
 	int frequency = 0;

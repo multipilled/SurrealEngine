@@ -23,7 +23,8 @@ struct GameLaunchInfo
 	bool IsKlingonHonorGuard() const { return gameExecutableName == "Klingons" || gameExecutableName == "Khg"; }
 	bool IsRune() const { return gameExecutableName == "Rune"; }
 	bool IsHarryPotter1() const { return gameExecutableName == "HP"; }
-	bool IsHarryPotter2() const { return gameExecutableName == "Game"; }
+	bool IsHarryPotter2() const { return gameExecutableName == "Game" && !IsBrotherBear(); }
+	bool IsBrotherBear() const { return gameName == "Disney's Brother Bear"; }
 	bool IsNerfArenaBlast() const { return gameExecutableName == "nerf" || gameExecutableName == "Nerf"; }
 };
 

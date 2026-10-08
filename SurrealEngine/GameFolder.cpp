@@ -386,6 +386,15 @@ GameLaunchInfo GameFolderSelection::ExamineFolder(const std::string& path)
 				info.gameVersionString = "433";
 			}
 			break;
+			case KnownUE1Games::BROTHERBEAR:
+			{
+				info.gameName = "Disney's Brother Bear";
+				info.ue1Version = 500;
+				info.gameVersion = 433;
+				info.gameSubVersion = 0;
+				info.gameVersionString = "433";
+			}
+			break;
 			case KnownUE1Games::UE1_GAME_NOT_FOUND:
 				// Do nothing, we want the fields to be empty.
 			break;

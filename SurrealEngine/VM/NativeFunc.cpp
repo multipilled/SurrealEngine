@@ -8,9 +8,16 @@ Array<NativeFuncHandler> NativeFunctions::NativeByIndex;
 std::map<std::pair<NameString, NameString>, NativeFuncHandler> NativeFunctions::NativeByName;
 Array<LatentRunState> NativeFunctions::LatentActionByIndex;
 std::map<LatentRunState, int> NativeFunctions::IndexForLatentAction;
+std::map<int, int> NativeFunctions::ArgCountByIndex;
+std::map<std::pair<NameString, NameString>, int> NativeFunctions::ArgCountByName;
 
-void NativeFunctions::RegisterHandler(const NameString& className, const NameString& funcName, int nativeIndex, NativeFuncHandler handler)
+void NativeFunctions::RegisterHandler(const NameString& className, const NameString& funcName, int nativeIndex, int argCount, NativeFuncHandler handler)
 {
+	if (nativeIndex != 0)
+		ArgCountByIndex[nativeIndex] = argCount;
+	else
+		ArgCountByName[{ funcName, className }] = argCount;
+
 	if (nativeIndex != 0)
 	{
 		if (nativeIndex == 2054 && funcName == "GetSoundLength") // DeusEx got two native functions with same intrinsic value!

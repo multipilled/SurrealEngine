@@ -5603,9 +5603,18 @@ void InitPropertyOffsets(PackageManager* packages)
 	InitPropertyOffsets_WarpZoneMarker(packages);
 	InitPropertyOffsets_LiftCenter(packages);
 	InitPropertyOffsets_RenderIterator(packages);
-	InitPropertyOffsets_InternetLink(packages);
-	InitPropertyOffsets_UdpLink(packages);
-	InitPropertyOffsets_TcpLink(packages);
+	if (packages->HasPackage("IpDrv")) // Brother Bear doesn't ship IpDrv
+	{
+		InitPropertyOffsets_InternetLink(packages);
+		InitPropertyOffsets_UdpLink(packages);
+		InitPropertyOffsets_TcpLink(packages);
+	}
+	else
+	{
+		memset(&PropOffsets_InternetLink, 0xff, sizeof(PropOffsets_InternetLink));
+		memset(&PropOffsets_UdpLink, 0xff, sizeof(PropOffsets_UdpLink));
+		memset(&PropOffsets_TcpLink, 0xff, sizeof(PropOffsets_TcpLink));
+	}
 	InitPropertyOffsets_RMusic_Player(packages);
 	if (packages->IsUnreal1())
 	{

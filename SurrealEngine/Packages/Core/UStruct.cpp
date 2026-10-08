@@ -287,6 +287,14 @@ ExprToken UStruct::ReadToken(ObjectStream* stream, int depth)
 	depth++;
 
 	ExprToken token = (ExprToken)stream->ReadUInt8();
+
+	// Brother Bear's compiler inserted an extra token before GlobalFunction, shifting
+	// GlobalFunction and the conversion tokens up to FloatToBool up by one into the
+	// unused 0x46 slot. Remap them to the standard UE1 values so the rest of the VM
+	// only ever sees standard tokens.
+	if (engine->LaunchInfo.IsBrotherBear() && (uint8_t)token >= 0x39 && (uint8_t)token <= 0x46)
+		token = (ExprToken)((uint8_t)token - 1);
+
 	PushUInt8((uint8_t)token);
 
 #ifdef _DEBUG

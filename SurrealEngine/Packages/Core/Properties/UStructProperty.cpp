@@ -47,10 +47,14 @@ void UStructProperty::LoadStructMemberValue(void* data, ObjectStream* stream)
 	if (Struct->Properties.empty())
 		throw std::runtime_error("Struct has no properties");
 
+	// Static array members (e.g. "var name Pitch[3];") serialize every element in order
 	for (UProperty* fieldprop : Struct->Properties)
 	{
-		void* fielddata = (uint8_t*)data + fieldprop->DataOffset.DataOffset;
-		fieldprop->LoadStructMemberValue(fielddata, stream);
+		for (int i = 0; i < fieldprop->ArrayDimension; i++)
+		{
+			void* fielddata = (uint8_t*)data + fieldprop->DataOffset.DataOffset + i * fieldprop->ElementPitch();
+			fieldprop->LoadStructMemberValue(fielddata, stream);
+		}
 	}
 }
 
@@ -72,8 +76,11 @@ void UStructProperty::SaveStructMemberValue(void* data, PackageStreamWriter* str
 
 	for (UProperty* fieldprop : Struct->Properties)
 	{
-		void* fielddata = (uint8_t*)data + fieldprop->DataOffset.DataOffset;
-		fieldprop->SaveStructMemberValue(fielddata, stream);
+		for (int i = 0; i < fieldprop->ArrayDimension; i++)
+		{
+			void* fielddata = (uint8_t*)data + fieldprop->DataOffset.DataOffset + i * fieldprop->ElementPitch();
+			fieldprop->SaveStructMemberValue(fielddata, stream);
+		}
 	}
 }
 

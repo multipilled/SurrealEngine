@@ -15,11 +15,26 @@ void USound::Load(ObjectStream* stream)
 	UObject::Load(stream);
 
 	Format = stream->ReadName();
+	if (engine->LaunchInfo.IsBrotherBear())
+	{
+		KWInfo.Flags = stream->ReadUInt32();
+		KWInfo.Duration = stream->ReadFloat();
+		KWInfo.SampleCount = stream->ReadUInt32();
+		KWInfo.BitsPerSample = stream->ReadUInt32();
+		KWInfo.Channels = stream->ReadUInt32();
+		KWInfo.SampleRate = stream->ReadUInt32();
+	}
 	if (stream->GetVersion() >= 63)
 		stream->ReadUInt32(); // lazy array skip offset
 	uint32_t size = stream->ReadIndex();
 	Data.resize(size);
 	stream->ReadBytes(Data.data(), size);
+
+	if (engine->LaunchInfo.IsBrotherBear() && stream->BytesLeft() > 0)
+	{
+		KWTrailer.resize(stream->BytesLeft());
+		stream->ReadBytes(KWTrailer.data(), (uint32_t)KWTrailer.size());
+	}
 }
 
 void USound::Save(PackageStreamWriter* stream)
@@ -49,6 +64,23 @@ void USound::GetSound()
 	else if (Format == "mp3" || Format == "mp2")
 	{
 		source = AudioSource::CreateMp3(Data);
+	}
+	else if (engine->LaunchInfo.IsBrotherBear())
+	{
+		// To do: decode Bink audio ("bik") and "XA". Play silence of the right length for now.
+		static bool warned = false;
+		if (!warned)
+		{
+			LogMessage("Sound format " + Format.ToString() + " is not supported yet, playing silence");
+			warned = true;
+		}
+		frequency = KWInfo.SampleRate ? (int)KWInfo.SampleRate : 22050;
+		channels = 1;
+		float seconds = KWInfo.Duration > 0.0f ? KWInfo.Duration : 0.1f;
+		samples.resize(std::max((size_t)4, (size_t)(seconds * frequency) & ~(size_t)3), 0.0f);
+		duration = samples.size() / (float)frequency;
+		engine->audiodev->GetDevice()->AddSound(this);
+		return;
 	}
 	else
 	{
