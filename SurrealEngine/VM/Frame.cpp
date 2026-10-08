@@ -482,7 +482,7 @@ ExpressionEvalResult Frame::Run()
 		Break();
 	}
 
-	const int maxInstructions = 500'000;
+	const int maxInstructions = 10'000'000;
 	int instructionsRetired = 0;
 	while (true)
 	{
