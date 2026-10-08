@@ -10,13 +10,13 @@ You need your own copy of the game. This repository holds no game files and neve
 - Loads every package (package version 80).
 - Runs the game's UnrealScript, with Brother Bear's shifted opcodes remapped.
 - Registers every engine native the game declares. Some are still stubs; the `nativeaudit` debugger command lists any gaps.
-- Boots into the first level, runs the intro cutscene scripts and draws the HUD.
+- Boots into the first level and plays the Aspen Forest intro cutscene through, with the camera flying along its splines.
 - Renders the levels with their lightmaps, including KnowWonder's sunlight.
-- Draws skeletal meshes (characters, plants, props) and plays their animations.
+- Draws skeletal meshes (characters, plants, props) and plays their animations, including anim channels such as eye blinks and head look that animate part of the skeleton.
 
 Not working yet:
 
-- Animations on part of the skeleton (eye blinks, head look, lip sync) and combined animations.
+- Combined animations (`AT_Combine`), transient anim channels and tweening between skeletal animations.
 - Shadows from sunlight on meshes.
 - Bink audio, so sounds are silent.
 - The particle system.
@@ -34,5 +34,8 @@ Point SurrealEngine at the game's install folder, the one that contains `System`
 - Lights with `LightEffect` 20 (`LE_Sunlight`) are directional. They shine along the light actor's rotation with no distance falloff; the level's shadow bits still decide which lightmap texels they reach.
 - Skeletal meshes (`SkeletalMesh`) have no vertex animation frames. Their bone weights and bone-space points reproduce the reference pose exactly when each bone's quaternion is turned into a matrix the Unreal way (`FQuat` to `FMatrix`) and composed with its parent, with no conjugation for the root.
 - `Animation` objects store each sequence's keys compressed. With each move, every track stores only its flags, its rotation, position and time key counts (each either 1 or the time key count), a position scale and a time scale. After the sequence list come all keys for all moves, in track order: rotations as three int16 modified Rodrigues parameters (`q = (2v, 1 - |v|²) / (1 + |v|²)` with `v = int16 / 32767`), positions as three int16 multiplied by the track's position scale and divided by 32767, and times as byte frame deltas multiplied by the time scale. `Moves[i]` belongs to the sequence at index `i`.
+
+- Interpolation (`PHYS_Interpolating`) keeps its path state in an `InterpolationManager` actor that the moving actor owns and has as its `TickParent`: the `Last` and `Dest` points, `PhysAlpha` and `PhysRate`. Each section is a cubic bezier from `Last` to `Dest` through `Last.StartControlPoint` and `Dest.EndControlPoint` (offsets from each point), travelled at the actor's `IPSpeed`. Reaching `Dest` calls the point's `InterpolateEnd(Manager, bForward)`, which sets the next `Dest`, starts a pause, or finishes.
+- Cutscene scripts are localization files in `System/CutScenes`, which the game names like `Cutscenes\AspFTut1_KodaIntro`. The cutscene parser switches on its command words, so it relies on string `switch` cases matching regardless of case, as they do in UE1.
 
 `Tools/BrotherBear` has small Python scripts used to research these formats. `upkg.py` dumps a package's name, import and export tables. `ubc.py` walks every function's bytecode and checks its size against the package. `kwanim.py` parses the compressed animations and checks that every one is read to its exact size.
