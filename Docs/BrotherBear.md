@@ -13,7 +13,7 @@ You need your own copy of the game. This repository holds no game files and neve
 - Boots into the first level and plays the Aspen Forest intro cutscene through, with the camera flying along its splines.
 - Renders the levels with their lightmaps, including KnowWonder's sunlight.
 - Draws skeletal meshes (characters, plants, props) and plays their animations, including anim channels such as eye blinks and head look that animate part of the skeleton.
-- Plays the game's sound effects and dialog, which are stored as Bink audio.
+- Plays the game's music, sound effects and dialog (stored as Bink audio), with subtitles.
 
 Not working yet:
 
@@ -38,6 +38,8 @@ Point SurrealEngine at the game's install folder, the one that contains `System`
 - `Animation` objects store each sequence's keys compressed. With each move, every track stores only its flags, its rotation, position and time key counts (each either 1 or the time key count), a position scale and a time scale. After the sequence list come all keys for all moves, in track order: rotations as three int16 modified Rodrigues parameters (`q = (2v, 1 - |v|²) / (1 + |v|²)` with `v = int16 / 32767`), positions as three int16 multiplied by the track's position scale and divided by 32767, and times as byte frame deltas multiplied by the time scale. `Moves[i]` belongs to the sequence at index `i`.
 
 - Interpolation (`PHYS_Interpolating`) keeps its path state in an `InterpolationManager` actor that the moving actor owns and has as its `TickParent`: the `Last` and `Dest` points, `PhysAlpha` and `PhysRate`. Each section is a cubic bezier from `Last` to `Dest` through `Last.StartControlPoint` and `Dest.EndControlPoint` (offsets from each point), travelled at the actor's `IPSpeed`. Reaching `Dest` calls the point's `InterpolateEnd(Manager, bForward)`, which sets the next `Dest`, starts a pause, or finishes.
+- The audio device's `MusicVolume` and `SoundVolume` are floats from 0 to 1 (the ini's `ALAudio.ALAudioSubsystem` section), not bytes. The options page sets them at startup with `set ini:Engine.Engine.AudioDevice`.
+- Menu text (`HPMenu.int`) and dialog subtitles (`hpdialog.int`) are UTF-16 files.
 - Cutscene scripts are localization files in `System/CutScenes`, which the game names like `Cutscenes\AspFTut1_KodaIntro`. The cutscene parser switches on its command words, so it relies on string `switch` cases matching regardless of case, as they do in UE1.
 
 `Tools/BrotherBear` has small Python scripts used to research these formats. `upkg.py` dumps a package's name, import and export tables. `ubc.py` walks every function's bytecode and checks its size against the package. `kwanim.py` parses the compressed animations and checks that every one is read to its exact size.
