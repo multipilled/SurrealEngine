@@ -13,12 +13,13 @@ You need your own copy of the game. This repository holds no game files and neve
 - Boots into the first level and plays the Aspen Forest intro cutscene through, with the camera flying along its splines.
 - Renders the levels with their lightmaps, including KnowWonder's sunlight.
 - Draws skeletal meshes (characters, plants, props) and plays their animations, including anim channels such as eye blinks and head look that animate part of the skeleton.
+- Plays the game's sound effects and dialog, which are stored as Bink audio.
 
 Not working yet:
 
 - Combined animations (`AT_Combine`), transient anim channels and tweening between skeletal animations.
 - Shadows from sunlight on meshes.
-- Bink audio, so sounds are silent.
+- The 9 sounds stored as `XA` audio, which stay silent.
 - The particle system.
 
 ## Running
@@ -30,6 +31,7 @@ Point SurrealEngine at the game's install folder, the one that contains `System`
 - Struct default values serialise every element of fixed-size array members. This fix is shared with every game.
 - Script bytecode: one extra token was inserted before `GlobalFunction`, so tokens 0x39 to 0x46 map to the standard 0x38 to 0x45. Tokens from 0x47 up are standard.
 - `Sound` objects carry 24 extra bytes after `Format`: flags, duration, sample count, bits per sample, channels and sample rate. Dialog sounds also carry a trailing block, probably lip sync data. Most sounds are Bink audio (`BIKi`) holding a 4x4 dummy video track.
+- Bink sounds all use the DCT flavour of Bink 1 audio (track flag 0x1000). Each frame starts with the audio packet: the decoded size, then a least-significant-bit-first stream of blocks padded to 32 bits. A block holds, per channel, two float coefficients, a quantizer per critical band, then runs of coefficients of a given bit width. An inverse DCT turns each block into 512, 1024 or 2048 samples (by sample rate), and the first sixteenth is cross-faded with the end of the previous block.
 
 - Lights with `LightEffect` 20 (`LE_Sunlight`) are directional. They shine along the light actor's rotation with no distance falloff; the level's shadow bits still decide which lightmap texels they reach.
 - Skeletal meshes (`SkeletalMesh`) have no vertex animation frames. Their bone weights and bone-space points reproduce the reference pose exactly when each bone's quaternion is turned into a matrix the Unreal way (`FQuat` to `FMatrix`) and composed with its parent, with no conjugation for the root.
