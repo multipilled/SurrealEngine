@@ -57,6 +57,11 @@ RenderDeviceCanvas::RenderDeviceCanvas(RenderDevice* device) : device(device)
 
 void RenderDeviceCanvas::begin(const Colorf& color)
 {
+	// A minimized window has no pixels to draw to
+	locked = device->Viewport->GetNativePixelWidth() > 0 && device->Viewport->GetNativePixelHeight() > 0;
+	if (!locked)
+		return;
+
 	device->Lock(vec4(0.0f), vec4(0.0f), vec4(color.r, color.g, color.b, color.a), nullptr, nullptr);
 
 	frame.XB = 0;
@@ -81,16 +86,23 @@ void RenderDeviceCanvas::begin(const Colorf& color)
 
 void RenderDeviceCanvas::end()
 {
+	if (!locked)
+		return;
+	locked = false;
 	device->Unlock(true);
 }
 
 void RenderDeviceCanvas::begin3d()
 {
+	if (!locked)
+		return;
 	device->ClearZ();
 }
 
 void RenderDeviceCanvas::end3d()
 {
+	if (!locked)
+		return;
 	device->SetSceneNode(&frame);
 	device->ClearZ();
 }
@@ -132,20 +144,28 @@ std::unique_ptr<CanvasTexture> RenderDeviceCanvas::createTexture(int width, int 
 
 void RenderDeviceCanvas::drawLineAntialiased(float x0, float y0, float x1, float y1, Colorf color)
 {
+	if (!locked)
+		return;
 	device->Draw2DLine(&frame, vec4(color.r, color.g, color.b, color.a), 0, vec3(x0, y0, 1.0f), vec3(x1, y1, 1.0f));
 }
 
 void RenderDeviceCanvas::fillTile(float x, float y, float width, float height, Colorf color)
 {
+	if (!locked)
+		return;
 	device->DrawTile(&frame, static_cast<RenderDeviceTexture*>(whiteTexture.get())->Info, x, y, width, height, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, vec4(color.r, color.g, color.b, color.a), vec4(0.0f), PF_Highlighted);
 }
 
 void RenderDeviceCanvas::drawTile(CanvasTexture* texture, float x, float y, float width, float height, float u, float v, float uvwidth, float uvheight, Colorf color)
 {
+	if (!locked)
+		return;
 	device->DrawTile(&frame, static_cast<RenderDeviceTexture*>(texture)->Info, x, y, width, height, u, v, uvwidth, uvheight, 1.0f, vec4(color.r, color.g, color.b, color.a), vec4(0.0f), PF_Highlighted);
 }
 
 void RenderDeviceCanvas::drawGlyph(CanvasTexture* texture, float x, float y, float width, float height, float u, float v, float uvwidth, float uvheight, Colorf color)
 {
+	if (!locked)
+		return;
 	device->DrawTile(&frame, static_cast<RenderDeviceTexture*>(texture)->Info, x, y, width, height, u, v, uvwidth, uvheight, 1.0f, vec4(color.r, color.g, color.b, color.a), vec4(0.0f), PF_SubpixelFont);
 }

@@ -234,8 +234,10 @@ void Engine::Run()
 
 		UpdateAudio();
 
+		// A minimized window has no pixels to draw to
 		viewport->SetViewportRect(0, 0, engine->window->GetPixelWidth(), engine->window->GetPixelHeight());
-		render->DrawGame(levelElapsed);
+		if (engine->window->GetPixelWidth() > 0 && engine->window->GetPixelHeight() > 0)
+			render->DrawGame(levelElapsed);
 
 		// Save the game if there is a request for it
 		if (SaveGameInfo.SaveGameSlot != DONT_SAVE_GAME)
@@ -511,7 +513,7 @@ UnrealMipmap* Engine::PlayVideo(VideoPlayer* video, UnrealMipmap* background)
 		audiodev->GetDevice()->Update();
 		GameWindow::ProcessEvents();
 
-		if (frame)
+		if (frame && engine->window->GetPixelWidth() > 0 && engine->window->GetPixelHeight() > 0)
 		{
 			texinfo[0].Mips = frame;
 			texinfo[0].USize = frame->Width;

@@ -191,4 +191,5 @@ protected:
 private:
 	RenderDevice* device = nullptr;
 	SceneNode frame;
+	bool locked = false;
 };
