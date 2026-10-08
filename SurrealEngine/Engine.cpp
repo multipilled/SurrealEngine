@@ -1466,7 +1466,8 @@ void Engine::LoadEngineSettings()
 	if (packages->MissingSESystemIni())
 	{
 		client->LoadProperties("WinDrv.WindowsClient");
-		audiodev->LoadProperties("Galaxy.GalaxyAudioSubsystem");
+		// Brother Bear's ini configures ALAudio rather than Galaxy
+		audiodev->LoadProperties(LaunchInfo.IsBrotherBear() ? "ALAudio.ALAudioSubsystem" : "Galaxy.GalaxyAudioSubsystem");
 		renderdev->LoadProperties("D3DDrv.Direct3DRenderDevice");
 	}
 	else

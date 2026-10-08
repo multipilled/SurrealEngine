@@ -12,8 +12,31 @@
 #include "Packages/Engine/Resources/UMusic.h"
 #include "Packages/Engine/Resources/USound.h"
 #include "Packages/Engine/Resources/Level/ULevel.h"
+#include <algorithm>
+#include <cmath>
 
 static float square(float x) { return x * x; }
+
+// Brother Bear's audio device keeps its volumes as floats from 0 to 1 rather than bytes. Its options page writes them
+// with "set ini:Engine.Engine.AudioDevice MusicVolume 0.7", and reads them back the same way.
+static bool UsesFractionalVolumes()
+{
+	return engine->LaunchInfo.IsBrotherBear();
+}
+
+static std::string VolumeToString(uint8_t volume)
+{
+	if (UsesFractionalVolumes())
+		return IniPropertyConverter<float>::ToString(volume / 255.0f);
+	return IniPropertyConverter<uint8_t>::ToString(volume);
+}
+
+static uint8_t VolumeFromString(const std::string& value)
+{
+	if (UsesFractionalVolumes())
+		return (uint8_t)std::round(std::clamp(IniPropertyConverter<float>::FromString(value), 0.0f, 1.0f) * 255.0f);
+	return IniPropertyConverter<uint8_t>::FromString(value);
+}
 
 std::string USurrealAudioDevice::GetPropertyAsString(const NameString& propertyName) const
 {
@@ -46,9 +69,9 @@ std::string USurrealAudioDevice::GetPropertyAsString(const NameString& propertyN
 	else if (propertyName == "Channels")
 		return IniPropertyConverter<int>::ToString(Channels);
 	else if (propertyName == "MusicVolume")
-		return IniPropertyConverter<uint8_t>::ToString(MusicVolume);
+		return VolumeToString(MusicVolume);
 	else if (propertyName == "SoundVolume")
-		return IniPropertyConverter<uint8_t>::ToString(SoundVolume);
+		return VolumeToString(SoundVolume);
 	else if (propertyName == "AmbientFactor")
 		return IniPropertyConverter<float>::ToString(AmbientFactor);
 
@@ -85,9 +108,9 @@ void USurrealAudioDevice::SetPropertyFromString(const NameString& propertyName, 
 	else if (propertyName == "Channels")
 		Channels = IniPropertyConverter<int>::FromString(value);
 	else if (propertyName == "MusicVolume")
-		MusicVolume = IniPropertyConverter<uint8_t>::FromString(value);
+		MusicVolume = VolumeFromString(value);
 	else if (propertyName == "SoundVolume")
-		SoundVolume = IniPropertyConverter<uint8_t>::FromString(value);
+		SoundVolume = VolumeFromString(value);
 	else if (propertyName == "AmbientFactor")
 		AmbientFactor = IniPropertyConverter<float>::FromString(value);
 	else
@@ -116,8 +139,16 @@ void USurrealAudioDevice::LoadProperties(const NameString& from)
 	Latency = IniPropertyConverter<int>::FromIniFile(*engine->packages->GetIniFile("System"), name_from, "Latency", Latency);
 	OutputRate = IniPropertyConverter<AudioFrequency>::FromIniFile(*engine->packages->GetIniFile("System"), name_from, "OutputRate", OutputRate);
 	Channels = IniPropertyConverter<int>::FromIniFile(*engine->packages->GetIniFile("System"), name_from, "Channels", Channels);
-	MusicVolume = IniPropertyConverter<uint8_t>::FromIniFile(*engine->packages->GetIniFile("System"), name_from, "MusicVolume", MusicVolume);
-	SoundVolume = IniPropertyConverter<uint8_t>::FromIniFile(*engine->packages->GetIniFile("System"), name_from, "SoundVolume", SoundVolume);
+	if (UsesFractionalVolumes())
+	{
+		MusicVolume = VolumeFromString(engine->packages->GetIniValue("System", name_from, "MusicVolume", VolumeToString(MusicVolume)));
+		SoundVolume = VolumeFromString(engine->packages->GetIniValue("System", name_from, "SoundVolume", VolumeToString(SoundVolume)));
+	}
+	else
+	{
+		MusicVolume = IniPropertyConverter<uint8_t>::FromIniFile(*engine->packages->GetIniFile("System"), name_from, "MusicVolume", MusicVolume);
+		SoundVolume = IniPropertyConverter<uint8_t>::FromIniFile(*engine->packages->GetIniFile("System"), name_from, "SoundVolume", SoundVolume);
+	}
 	AmbientFactor = IniPropertyConverter<float>::FromIniFile(*engine->packages->GetIniFile("System"), name_from, "AmbientFactor", AmbientFactor);
 }
 
@@ -136,8 +167,8 @@ void USurrealAudioDevice::SaveConfig()
 	engine->packages->SetIniValue("System", Class, "Latency", IniPropertyConverter<int>::ToString(Latency));
 	engine->packages->SetIniValue("System", Class, "OutputRate", IniPropertyConverter<AudioFrequency>::ToString(OutputRate));
 	engine->packages->SetIniValue("System", Class, "Channels", IniPropertyConverter<int>::ToString(Channels));
-	engine->packages->SetIniValue("System", Class, "MusicVolume", IniPropertyConverter<uint8_t>::ToString(MusicVolume));
-	engine->packages->SetIniValue("System", Class, "SoundVolume", IniPropertyConverter<uint8_t>::ToString(SoundVolume));
+	engine->packages->SetIniValue("System", Class, "MusicVolume", VolumeToString(MusicVolume));
+	engine->packages->SetIniValue("System", Class, "SoundVolume", VolumeToString(SoundVolume));
 	engine->packages->SetIniValue("System", Class, "AmbientFactor", IniPropertyConverter<float>::ToString(AmbientFactor));
 }
 
