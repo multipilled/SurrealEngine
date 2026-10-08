@@ -81,6 +81,13 @@ NameString UActor::GetAnimGroup(const NameString& sequence)
 // bAnimNotify   - true if animation notify events should be fired when animating
 // bAnimFinished - true if AnimLast was reached and there's no looping
 
+// Brother Bear's Actor class has no OldAnimRate
+static void SetOldAnimRate(UActor* actor, float rate)
+{
+	if (PropOffsets_Actor.OldAnimRate.DataOffset != ~(size_t)0)
+		actor->OldAnimRate() = rate;
+}
+
 void UActor::PlayAnim(const NameString& sequence, float rate, float tweenTime)
 {
 	if (Mesh())
@@ -99,7 +106,7 @@ void UActor::PlayAnim(const NameString& sequence, float rate, float tweenTime)
 				AnimRate() = rate * seq->Rate / seq->NumFrames;
 				TweenRate() = tweenTime > 0.0f ? 1.0f / (tweenTime * seq->NumFrames) : 0.0f;
 				bAnimNotify() = !seq->Notifys.empty();
-				OldAnimRate() = AnimRate();
+				SetOldAnimRate(this, AnimRate());
 			}
 			else
 			{
@@ -110,7 +117,7 @@ void UActor::PlayAnim(const NameString& sequence, float rate, float tweenTime)
 				AnimRate() = 0.0f;
 				TweenRate() = tweenTime > 0.0f ? 1.0f / tweenTime : 10.0f;
 				bAnimNotify() = false;
-				OldAnimRate() = 0.0f;
+				SetOldAnimRate(this, 0.0f);
 				AnimMinRate() = 0.0f;
 			}
 
@@ -270,7 +277,7 @@ void UActor::LoopAnim(const NameString& sequence, float rate, float tweenTime, f
 					AnimRate() = rate * seq->Rate / seq->NumFrames;
 					AnimMinRate() = minRate * seq->Rate / seq->NumFrames;
 					TweenRate() = tweenTime > 0.0f ? 1.0f / (tweenTime * seq->NumFrames) : 0.0f;
-					OldAnimRate() = AnimRate();
+					SetOldAnimRate(this, AnimRate());
 				}
 			}
 			else
@@ -286,7 +293,7 @@ void UActor::LoopAnim(const NameString& sequence, float rate, float tweenTime, f
 					AnimRate() = rate * seq->Rate / seq->NumFrames;
 					AnimMinRate() = minRate * seq->Rate / seq->NumFrames;
 					TweenRate() = tweenTime > 0.0f ? 1.0f / (tweenTime * seq->NumFrames) : 0.0f;
-					OldAnimRate() = AnimRate();
+					SetOldAnimRate(this, AnimRate());
 				}
 				else
 				{
@@ -297,7 +304,7 @@ void UActor::LoopAnim(const NameString& sequence, float rate, float tweenTime, f
 					AnimRate() = 0.0f;
 					TweenRate() = tweenTime > 0.0f ? 1.0f / tweenTime : 10.0f;
 					bAnimNotify() = false;
-					OldAnimRate() = 0.0f;
+					SetOldAnimRate(this, 0.0f);
 					AnimMinRate() = 0.0f;
 				}
 				bAnimFinished() = false;
@@ -322,7 +329,7 @@ void UActor::TweenAnim(const NameString& sequence, float tweenTime)
 			AnimRate() = 0.0f;
 			AnimMinRate() = 0.0f;
 			TweenRate() = tweenTime > 0.0f ? 1.0f / (tweenTime * seq->NumFrames) : 0.0f;
-			OldAnimRate() = AnimRate();
+			SetOldAnimRate(this, AnimRate());
 			bAnimNotify() = false;
 			bAnimFinished() = false;
 			bAnimLoop() = false;
@@ -617,9 +624,21 @@ void UActor::SetTweenFromBlendAnimFrame(int slot)
 
 UActor* UActor::CreateAnimChannel(UClass* NewClass, EAnimType Type, const NameString& RootBone, bool bTransient)
 {
-	auto animChannel = Spawn(NewClass, {}, {}, {}, {});
-	LogUnimplemented("Actor.CreateAnimChannel");
-	return animChannel;
+	// To do: AT_Combine (combine with the owner's anim instead of replacing it) and transient channels
+	int rootBone = BoneNumber(RootBone);
+	if (rootBone < 0)
+		return nullptr;
+
+	UActor* channel = Spawn(NewClass, this, {}, {}, {});
+	if (!channel)
+		return nullptr;
+
+	// The channel plays its animation on the owner's skeleton. It is never drawn itself.
+	channel->Mesh() = Mesh();
+	channel->bHidden() = true;
+	channel->AnimChannels.RootBone = rootBone;
+	AnimChannels.Channels.push_back(channel);
+	return channel;
 }
 
 int UActor::BoneNumber(const NameString& Bone)

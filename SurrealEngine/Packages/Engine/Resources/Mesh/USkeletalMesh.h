@@ -36,6 +36,15 @@ struct BoneWeight
 	uint16_t BoneWeight;
 };
 
+// One animation applied to a skeleton: the actor's own animation, or an anim channel that replaces part of the skeleton
+struct SkeletalAnimLayer
+{
+	UAnimation* Anim = nullptr;
+	NameString Sequence;
+	float AnimFrame = 0.0f; // The actor's AnimFrame: 0 to 1 over the sequence, negative while tweening into it
+	int RootBone = -1; // Bones affected: this bone and its children, or all bones when -1
+};
+
 class USkeletalMesh : public ULodMesh
 {
 public:
@@ -44,9 +53,9 @@ public:
 	void Load(ObjectStream* stream) override;
 	void Save(PackageStreamWriter* stream) override;
 
-	// Skins the mesh with the given sequence of a KnowWonder animation (or the reference pose when there is none).
-	// animFrame is the actor's AnimFrame: 0 to 1 over the sequence.
-	void GetPose(UAnimation* anim, const NameString& sequence, float animFrame, Array<vec3>& outPoints, Array<vec3>& outNormals);
+	// Skins the mesh with KnowWonder animations. Later layers replace earlier ones on the bones they affect.
+	// Bones no layer animates keep the reference pose.
+	void GetPose(const SkeletalAnimLayer* layers, int layerCount, Array<vec3>& outPoints, Array<vec3>& outNormals);
 
 	Array<ExtMeshWedge> ExtWedges;
 	Array<vec3> Points;
@@ -75,6 +84,7 @@ private:
 	};
 
 	const Array<int>& GetAnimBoneMap(UAnimation* anim);
+	bool IsBoneInSubtree(int bone, int rootBone) const;
 
 	std::map<UAnimation*, Array<int>> AnimBoneMaps; // Mesh bone to animation bone, per animation
 	Array<BoneTransform> BoneTransforms;

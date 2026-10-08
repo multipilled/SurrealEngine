@@ -567,10 +567,29 @@ bool VisibleMesh::DrawSkeletalMesh(VisibleFrame* frame, UActor* actor, UActor* l
 	if (actor->bAnimByOwner() && actor->Owner())
 		animSource = actor->Owner();
 
-	UAnimation* anim = animSource->SkelAnim() ? animSource->SkelAnim() : mesh->DefaultAnimation;
+	SkeletalAnimLayer layers[8];
+	int layerCount = 0;
+
+	SkeletalAnimLayer& mainLayer = layers[layerCount++];
+	mainLayer.Anim = animSource->SkelAnim() ? animSource->SkelAnim() : mesh->DefaultAnimation;
+	mainLayer.Sequence = animSource->AnimSequence();
+	mainLayer.AnimFrame = animSource->AnimFrame();
+
+	for (UActor* channel : animSource->AnimChannels.Channels)
+	{
+		if (layerCount == 8)
+			break;
+		if (channel->bDeleteMe() || channel->Mesh() != mesh || channel->AnimSequence().IsNone())
+			continue;
+		SkeletalAnimLayer& layer = layers[layerCount++];
+		layer.Anim = channel->SkelAnim() ? channel->SkelAnim() : mesh->DefaultAnimation;
+		layer.Sequence = channel->AnimSequence();
+		layer.AnimFrame = channel->AnimFrame();
+		layer.RootBone = channel->AnimChannels.RootBone;
+	}
 
 	static Array<vec3> points, normals;
-	mesh->GetPose(anim, animSource->AnimSequence(), animSource->AnimFrame(), points, normals);
+	mesh->GetPose(layers, layerCount, points, normals);
 
 	SetupLodMeshTextures(actor, mesh);
 	return DrawSkinnedFaces(frame, actor, lightLocationActor, mesh, points, normals, ObjectToWorld, ObjectNormalToWorld, translucentPass);

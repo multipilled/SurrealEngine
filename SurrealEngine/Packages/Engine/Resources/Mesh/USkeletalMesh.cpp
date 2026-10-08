@@ -174,29 +174,56 @@ static vec3 SamplePosition(const AnimTrack& track, float time)
 	return mix(track.KeyPos[key0], track.KeyPos[key1], t);
 }
 
-void USkeletalMesh::GetPose(UAnimation* anim, const NameString& sequence, float animFrame, Array<vec3>& outPoints, Array<vec3>& outNormals)
+bool USkeletalMesh::IsBoneInSubtree(int bone, int rootBone) const
 {
-	// Find the animation move for the sequence
-	const AnimMove* move = nullptr;
-	const Array<int>* boneMap = nullptr;
-	float time = 0.0f;
-	if (anim && !anim->Moves.empty())
+	while (true)
 	{
+		if (bone == rootBone)
+			return true;
+		int parent = (int)RefSkeleton[bone].ParentIndex;
+		if (bone == 0 || parent >= bone)
+			return false;
+		bone = parent;
+	}
+}
+
+void USkeletalMesh::GetPose(const SkeletalAnimLayer* layers, int layerCount, Array<vec3>& outPoints, Array<vec3>& outNormals)
+{
+	// Find the animation move for each layer's sequence
+	struct LayerMove
+	{
+		const AnimMove* Move = nullptr;
+		const Array<int>* BoneMap = nullptr;
+		float Time = 0.0f;
+		int RootBone = -1;
+	};
+	LayerMove moves[8];
+	int moveCount = 0;
+	for (int l = 0; l < layerCount && moveCount < 8; l++)
+	{
+		const SkeletalAnimLayer& layer = layers[l];
+		UAnimation* anim = layer.Anim;
+		if (!anim || anim->Moves.empty() || (layer.RootBone >= (int)RefSkeleton.size()))
+			continue;
+
 		size_t seqIndex = 0;
 		for (size_t i = 0; i < anim->AnimSeqs.size(); i++)
 		{
-			if (anim->AnimSeqs[i].Name == sequence)
+			if (anim->AnimSeqs[i].Name == layer.Sequence)
 			{
 				seqIndex = i;
 				break;
 			}
 		}
-		if (seqIndex < anim->Moves.size())
-		{
-			move = &anim->Moves[seqIndex];
-			boneMap = &GetAnimBoneMap(anim);
-			time = std::max(animFrame, 0.0f) * move->TrackTime;
-		}
+		if (seqIndex >= anim->Moves.size())
+			continue;
+
+		// To do: tween from the previous pose while AnimFrame is negative
+		LayerMove& move = moves[moveCount++];
+		move.Move = &anim->Moves[seqIndex];
+		move.BoneMap = &GetAnimBoneMap(anim);
+		move.Time = std::max(layer.AnimFrame, 0.0f) * move.Move->TrackTime;
+		move.RootBone = layer.RootBone;
 	}
 
 	// Bone transforms in mesh space. Each bone's rotation and position are relative to its parent.
@@ -206,29 +233,36 @@ void USkeletalMesh::GetPose(UAnimation* anim, const NameString& sequence, float 
 		quaternion q = RefSkeleton[i].Orientation;
 		vec3 p = RefSkeleton[i].Position;
 
-		int animBone = boneMap ? (*boneMap)[i] : -1;
-		if (animBone != -1)
+		for (int l = 0; l < moveCount; l++)
 		{
+			const LayerMove& move = moves[l];
+			if (move.RootBone != -1 && !IsBoneInSubtree((int)i, move.RootBone))
+				continue;
+
+			int animBone = (*move.BoneMap)[i];
+			if (animBone == -1)
+				continue;
+
 			int trackIndex = animBone;
-			if (!move->BoneIndices.empty())
+			if (!move.Move->BoneIndices.empty())
 			{
 				trackIndex = -1;
-				for (size_t j = 0; j < move->BoneIndices.size(); j++)
+				for (size_t j = 0; j < move.Move->BoneIndices.size(); j++)
 				{
-					if (move->BoneIndices[j] == (uint32_t)animBone)
+					if (move.Move->BoneIndices[j] == (uint32_t)animBone)
 					{
 						trackIndex = (int)j;
 						break;
 					}
 				}
 			}
-			if (trackIndex >= 0 && (size_t)trackIndex < move->AnimTracks.size())
+			if (trackIndex >= 0 && (size_t)trackIndex < move.Move->AnimTracks.size())
 			{
-				const AnimTrack& track = move->AnimTracks[trackIndex];
+				const AnimTrack& track = move.Move->AnimTracks[trackIndex];
 				if (!track.KeyQuat.empty())
-					q = SampleRotation(track, time);
+					q = SampleRotation(track, move.Time);
 				if (!track.KeyPos.empty())
-					p = SamplePosition(track, time);
+					p = SamplePosition(track, move.Time);
 			}
 		}
 

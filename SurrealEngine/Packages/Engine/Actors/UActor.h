@@ -576,6 +576,13 @@ public:
 		float T = -1.0f;
 	} TweenFromBlendAnimFrame[4];
 
+	// Brother Bear anim channels: actors whose animation replaces part of their owner's skeleton
+	struct
+	{
+		int RootBone = -1; // Set on a channel
+		Array<UActor*> Channels; // Set on the channel's owner
+	} AnimChannels;
+
 	int LastDrawFrame = -1;
 
 	float SleepTimeLeft = 0.0f;
