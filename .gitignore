@@ -7,3 +7,9 @@
 /.cppbuild
 /*.sln
 .DS_Store
+
+# Game data, outputs, extracted assets and agent worktrees: never committed
+gamedata/
+out/
+extracted/
+.claude/worktrees/

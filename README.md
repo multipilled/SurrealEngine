@@ -1,3 +1,11 @@
+> **This is a fork: the `brother-bear` branch adds support for Disney's Brother Bear (PC, 2003).**
+> It is an AI-assisted fork. Upstream SurrealEngine does not accept AI-written code (see `NO-AI Code Rule.md`), so
+> none of this work is offered upstream; please don't open pull requests or issues about it on the upstream project.
+> You need your own copy of the game: no game files are in this repository. Status (about 65%): every package loads,
+> the game's script runs, all 16 maps load and run, rendering, animation, audio, particles, cutscenes, climbing and
+> save/load work; a verified play-through of the levels and arenas is next. Details: [Docs/BrotherBear.md](Docs/BrotherBear.md).
+> Build: [Docs/Building.md](Docs/Building.md). The rest of this README is upstream's.
+
 ![SEBANNER](Resources/surreal-engine-banner.png)
 
 # Welcome to Surreal Engine!
