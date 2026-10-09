@@ -155,6 +155,20 @@ static vec3 SamplePosition(const AnimTrack& track, float time, float trackTime)
 	return mix(track.KeyPos[key0], track.KeyPos[key1], t);
 }
 
+// Moves[i] holds the keys of the sequence at index i
+static const AnimMove* FindMove(UAnimation* anim, const NameString& sequence)
+{
+	if (anim && !sequence.IsNone())
+	{
+		for (size_t i = 0; i < anim->AnimSeqs.size() && i < anim->Moves.size(); i++)
+		{
+			if (anim->AnimSeqs[i].Name == sequence)
+				return &anim->Moves[i];
+		}
+	}
+	return nullptr;
+}
+
 void USkeletalMesh::ApplyAnim(UActor* actor, UActor* target)
 {
 	auto& pose = actor->SkelPose;
@@ -180,20 +194,7 @@ void USkeletalMesh::ApplyAnim(UActor* actor, UActor* target)
 	if (!actor->SkelAnim())
 		actor->SkelAnim() = DefaultAnimation;
 	UAnimation* anim = actor->SkelAnim();
-
-	// Moves[i] holds the keys of the sequence at index i
-	const AnimMove* move = nullptr;
-	if (anim && !actor->AnimSequence().IsNone())
-	{
-		for (size_t i = 0; i < anim->AnimSeqs.size() && i < anim->Moves.size(); i++)
-		{
-			if (anim->AnimSeqs[i].Name == actor->AnimSequence())
-			{
-				move = &anim->Moves[i];
-				break;
-			}
-		}
-	}
+	const AnimMove* move = FindMove(anim, actor->AnimSequence());
 
 	if (!move)
 	{
@@ -236,6 +237,9 @@ void USkeletalMesh::ApplyAnim(UActor* actor, UActor* target)
 		float time = std::clamp(actor->AnimFrame(), 0.0f, 1.0f) * move->TrackTime;
 		float blend = (pose.Valid && actor->TweenRate() != 0.0f) ? 1.0f - actor->TweenAlpha() : 0.0f;
 
+		// With root motion (bAnimMove) the actor moves by the root bone's motion instead, so the root stays at its reference position
+		bool pinRoot = !isChannel && actor->bAnimMove();
+
 		for (size_t i = 0; i < boneCount; i++)
 		{
 			int trackIndex = pose.BoneMap[i];
@@ -249,7 +253,7 @@ void USkeletalMesh::ApplyAnim(UActor* actor, UActor* target)
 				const AnimTrack& track = move->AnimTracks[trackIndex];
 				if (!track.KeyQuat.empty())
 					rotation = SampleRotation(track, time, move->TrackTime);
-				if (!track.KeyPos.empty())
+				if (!track.KeyPos.empty() && !(pinRoot && i == 0))
 					position = SamplePosition(track, time, move->TrackTime);
 			}
 
@@ -281,7 +285,7 @@ void USkeletalMesh::ApplyAnim(UActor* actor, UActor* target)
 	}
 }
 
-void USkeletalMesh::GetPose(UActor* actor, int frame, Array<vec3>& outPoints, Array<vec3>& outNormals)
+void USkeletalMesh::UpdateBoneTransforms(UActor* actor, int frame)
 {
 	if (actor->SkelPose.Mesh != this || actor->SkelPose.Frame != frame)
 	{
@@ -326,6 +330,25 @@ void USkeletalMesh::GetPose(UActor* actor, int frame, Array<vec3>& outPoints, Ar
 			bone.t.z = parent.m[2][0] * p.x + parent.m[2][1] * p.y + parent.m[2][2] * p.z + parent.t.z;
 		}
 	}
+}
+
+bool USkeletalMesh::GetBoneCoordsKW(UActor* actor, int frame, int bone, vec3& outOrigin, vec3& outXAxis, vec3& outYAxis, vec3& outZAxis)
+{
+	if (bone < 0 || (size_t)bone >= RefSkeleton.size())
+		return false;
+
+	UpdateBoneTransforms(actor, frame);
+	const BoneTransform& transform = BoneTransforms[bone];
+	outOrigin = transform.t;
+	outXAxis = vec3(transform.m[0][0], transform.m[1][0], transform.m[2][0]);
+	outYAxis = vec3(transform.m[0][1], transform.m[1][1], transform.m[2][1]);
+	outZAxis = vec3(transform.m[0][2], transform.m[1][2], transform.m[2][2]);
+	return true;
+}
+
+void USkeletalMesh::GetPose(UActor* actor, int frame, Array<vec3>& outPoints, Array<vec3>& outNormals)
+{
+	UpdateBoneTransforms(actor, frame);
 
 	// Skin the points
 	outPoints.clear();
@@ -370,6 +393,28 @@ void USkeletalMesh::GetPose(UActor* actor, int frame, Array<vec3>& outPoints, Ar
 		float len = std::sqrt(dot(n, n));
 		n = len > 0.0f ? n * (1.0f / len) : vec3(0.0f, 0.0f, 1.0f);
 	}
+}
+
+bool USkeletalMesh::GetRootPositionKW(UActor* actor, bool firstKey, vec3& outPosition)
+{
+	UAnimation* anim = actor->SkelAnim() ? actor->SkelAnim() : DefaultAnimation;
+	const AnimMove* move = FindMove(anim, actor->AnimSequence());
+	if (!move || RefSkeleton.empty())
+		return false;
+
+	for (size_t i = 0; i < anim->RefBones.size() && i < move->AnimTracks.size(); i++)
+	{
+		if (anim->RefBones[i].Name == RefSkeleton[0].Name)
+		{
+			const AnimTrack& track = move->AnimTracks[i];
+			if (track.KeyPos.empty())
+				return false;
+			float time = std::clamp(actor->AnimFrame(), 0.0f, 1.0f) * move->TrackTime;
+			outPosition = firstKey ? track.KeyPos.front() : SamplePosition(track, time, move->TrackTime);
+			return true;
+		}
+	}
+	return false;
 }
 
 void USkeletalMesh::Save(PackageStreamWriter* stream)

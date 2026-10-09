@@ -80,6 +80,7 @@ public:
 	int SpawnedTotal = 0;
 	int SpawnOnTrigger = 0;
 	float SpawnOnTriggerPPS = 0.0f;
+	int MeshSpawnCounter = 0;
 	bool Initialized = false;
 	bool Disabled = false;
 	bool LastDisabledSetting = false;
@@ -114,7 +115,8 @@ public:
 private:
 	bool Update(UActor* actor, float elapsed);
 	void UpdateSubEmitter(UActor* actor, int index, float elapsed);
-	void SpawnParticles(UActor* actor, int index, int count);
+	void SpawnParticles(UActor* actor, int index, int count, const vec3* spawnLocation = nullptr, const vec3& addVelocity = vec3(0.0f));
+	bool GetMeshSpawningPoints(UActor* actor, int index, Array<vec3>& points);
 	void ResetSubEmitter(UActor* actor, int index);
 	float Random();
 	float RandomRange(float minValue, float maxValue);
@@ -123,6 +125,7 @@ private:
 	SubEmitterBB SubEmitters[4];
 	vec3 GlobalOffset = vec3(0.0f);
 	vec3 LastActorLocation = vec3(0.0f);
+	float TimeTillReset = 0.0f;
 	BBox Bounds;
 	bool HasBounds = false;
 	bool Initialized = false;

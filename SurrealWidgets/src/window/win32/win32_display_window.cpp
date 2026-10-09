@@ -7,11 +7,21 @@
 #include <cmath>
 #include <vector>
 #include <dwmapi.h>
+#include <cstdlib>
+#include <cstring>
 
 #define DIRECTINPUT_VERSION 0x0800
 #include <dinput.h>
 
 #pragma comment(lib, "dwmapi.lib")
+
+// SURREAL_NO_ACTIVATE=1: show windows without ever activating them, so a game started in the background
+// (automated test runs) never takes the foreground or the user's keyboard input.
+static bool NoActivate()
+{
+	static const bool noActivate = [] { const char* v = std::getenv("SURREAL_NO_ACTIVATE"); return v && std::strcmp(v, "1") == 0; }();
+	return noActivate;
+}
 
 #ifndef HID_USAGE_PAGE_GENERIC
 #define HID_USAGE_PAGE_GENERIC		((USHORT) 0x01)
@@ -118,6 +128,8 @@ Win32DisplayWindow::Win32DisplayWindow(DisplayWindowHost* windowHost, WidgetType
 
 	if (!owner)
 		exstyle |= WS_EX_APPWINDOW;
+	if (NoActivate())
+		exstyle |= WS_EX_NOACTIVATE;
 
 	CreateWindowEx(exstyle, L"SurrealWidgetsWindow", L"", style, 0, 0, 100, 100, owner ? owner->WindowHandle.hwnd : 0, 0, GetModuleHandle(0), this);
 }
@@ -283,7 +295,7 @@ void Win32DisplayWindow::SetClientFrame(const Rect& box)
 
 void Win32DisplayWindow::Show()
 {
-	ShowWindow(WindowHandle.hwnd, PopupWindow ? SW_SHOWNA : SW_SHOW);
+	ShowWindow(WindowHandle.hwnd, (PopupWindow || NoActivate()) ? SW_SHOWNA : SW_SHOW);
 }
 
 void Win32DisplayWindow::ShowFullscreen()
@@ -295,18 +307,18 @@ void Win32DisplayWindow::ShowFullscreen()
 	DWORD dwStyle = GetWindowLong(WindowHandle.hwnd, GWL_STYLE);
 	SetWindowLongPtr(WindowHandle.hwnd, GWL_EXSTYLE, WS_EX_APPWINDOW);
 	SetWindowLongPtr(WindowHandle.hwnd, GWL_STYLE, dwStyle & ~WS_OVERLAPPEDWINDOW);
-	SetWindowPos(WindowHandle.hwnd, HWND_TOP, 0, 0, width, height, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+	SetWindowPos(WindowHandle.hwnd, HWND_TOP, 0, 0, width, height, SWP_FRAMECHANGED | SWP_SHOWWINDOW | (NoActivate() ? SWP_NOACTIVATE : 0));
 	Fullscreen = true;
 }
 
 void Win32DisplayWindow::ShowMaximized()
 {
-	ShowWindow(WindowHandle.hwnd, SW_SHOWMAXIMIZED);
+	ShowWindow(WindowHandle.hwnd, NoActivate() ? SW_SHOWNOACTIVATE : SW_SHOWMAXIMIZED);
 }
 
 void Win32DisplayWindow::ShowMinimized()
 {
-	ShowWindow(WindowHandle.hwnd, SW_SHOWMINIMIZED);
+	ShowWindow(WindowHandle.hwnd, NoActivate() ? SW_SHOWMINNOACTIVE : SW_SHOWMINIMIZED);
 }
 
 void Win32DisplayWindow::ShowNormal()
@@ -316,7 +328,7 @@ void Win32DisplayWindow::ShowNormal()
 		SetWindowLongPtr(WindowHandle.hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW);
 		Fullscreen = false;
 	}
-	ShowWindow(WindowHandle.hwnd, SW_NORMAL);
+	ShowWindow(WindowHandle.hwnd, NoActivate() ? SW_SHOWNOACTIVATE : SW_NORMAL);
 }
 
 void Win32DisplayWindow::SetWindowResizable(bool enable)
@@ -358,7 +370,7 @@ void Win32DisplayWindow::Hide()
 
 void Win32DisplayWindow::Activate()
 {
-	if (!PopupWindow)
+	if (!PopupWindow && !NoActivate())
 		SetFocus(WindowHandle.hwnd);
 }
 
