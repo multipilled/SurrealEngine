@@ -144,12 +144,20 @@ void Engine::Run()
 	if (!LaunchInfo.noEntryMap)
 		LoadEntryMap();
 
-	if (LaunchInfo.url.empty())
-		LoadMap(GetDefaultURL(packages->GetIniValue("system", "URL", "LocalMap")));
+	// --loadgame=N starts from a saved game, as the original launchers' -LOADGAME=N does
+	if (LaunchInfo.loadGame >= 0 && LoadFromSaveFile(UnrealURL("?load=" + std::to_string(LaunchInfo.loadGame))))
+	{
+		PossessSavedPlayer();
+	}
 	else
-		LoadMap(UnrealURL(GetDefaultURL(packages->GetIniValue("system", "URL", "LocalMap")), LaunchInfo.url));
+	{
+		if (LaunchInfo.url.empty())
+			LoadMap(GetDefaultURL(packages->GetIniValue("system", "URL", "LocalMap")));
+		else
+			LoadMap(UnrealURL(GetDefaultURL(packages->GetIniValue("system", "URL", "LocalMap")), LaunchInfo.url));
 
-	LoginPlayer();
+		LoginPlayer();
+	}
 
 	auto objprop = GC::Alloc<UObjectProperty>(NameString(), nullptr, ObjectFlags::NoFlags);
 	auto vecprop = GC::Alloc<UStructProperty>(NameString(), nullptr, ObjectFlags::NoFlags);
@@ -236,9 +244,27 @@ void Engine::Run()
 		UpdateAudio();
 
 		// A minimized window has no pixels to draw to
-		viewport->SetViewportRect(0, 0, engine->window->GetPixelWidth(), engine->window->GetPixelHeight());
+		// Brother Bear only had 4:3 display modes, so on a wider window its picture is centered (pillarboxed)
+		int viewWidth = engine->window->GetPixelWidth();
+		if (LaunchInfo.IsBrotherBear())
+			viewWidth = std::min(viewWidth, (int)std::round(engine->window->GetPixelHeight() * (4.0f / 3.0f)));
+		viewport->SetViewportRect((engine->window->GetPixelWidth() - viewWidth) / 2, 0, viewWidth, engine->window->GetPixelHeight());
 		if (engine->window->GetPixelWidth() > 0 && engine->window->GetPixelHeight() > 0)
 			render->DrawGame(levelElapsed);
+
+		// KnowWonder games (Brother Bear) ask for a save by setting PlayerPawn.bQueuedToSaveGame.
+		// Their engine then saves number 0 in the current save slot folder, with OptionSaveScreenBMP
+		// as the description (the slot's thumbnail picture), and clears the flag.
+		if (PropOffsets_PlayerPawn.bQueuedToSaveGame.DataOffset != ~(size_t)0 && viewport->Actor())
+		{
+			BitfieldBool queued = viewport->Actor()->BoolValue(PropOffsets_PlayerPawn.bQueuedToSaveGame);
+			if (queued)
+			{
+				queued = false;
+				SaveGameInfo.SaveGameSlot = 0;
+				SaveGameInfo.SaveGameDescription = PropOffsets_PlayerPawn.OptionSaveScreenBMP.DataOffset != ~(size_t)0 ? viewport->Actor()->Value<std::string>(PropOffsets_PlayerPawn.OptionSaveScreenBMP) : std::string();
+			}
+		}
 
 		// Save the game if there is a request for it
 		if (SaveGameInfo.SaveGameSlot != DONT_SAVE_GAME)
@@ -294,8 +320,8 @@ void Engine::Run()
 		if (ClientTravelInfo.URL.HasOption("load"))
 		{
 			UnrealURL url(ClientTravelInfo.URL);
-			LoadFromSaveFile(url);
-			PossessSavedPlayer();
+			if (LoadFromSaveFile(url))
+				PossessSavedPlayer();
 		}
 
 		if (!ClientTravelInfo.URL.Map.empty())
@@ -771,15 +797,12 @@ void Engine::LoadMap(const UnrealURL& url, const std::map<std::string, std::stri
 		CallEvent(LevelInfo->Game(), "DetailChange", {});
 }
 
-void Engine::LoadFromSaveFile(const UnrealURL& url)
+bool Engine::LoadFromSaveFile(const UnrealURL& url)
 {
 	ClientTravelInfo.URL.Clear();
 
-	if (Level)
-		CallEvent(console, EventName::NotifyLevelChange);
-
 	if (url.HasOption("entry")) // Not sure what the purpose of this kind of travel is - do nothing for now.
-		return;
+		return false;
 
 	Package* savefilePackage = nullptr;
 	uint32_t slotNum = 0;
@@ -787,11 +810,19 @@ void Engine::LoadFromSaveFile(const UnrealURL& url)
 	if (url.HasOption("load"))
 	{
 		slotNum = Convert::to_uint32(url.GetOption("load"));
-		savefilePackage = packages->LoadSaveSlot(slotNum);
+		savefilePackage = packages->LoadSaveFile(GetSaveFileName(slotNum));
 	}
 
 	if (!savefilePackage)
-		return;
+	{
+		LogMessage("Could not find saved game " + (packages->GetSaveFolderPath() / GetSaveFileName(slotNum)).string());
+		return false;
+	}
+
+	LogMessage("Loading game... filename: " + (packages->GetSaveFolderPath() / GetSaveFileName(slotNum)).string());
+
+	if (Level)
+		CallEvent(console, EventName::NotifyLevelChange);
 
 	audiodev->StopSounds();
 	UnloadMap();
@@ -810,15 +841,25 @@ void Engine::LoadFromSaveFile(const UnrealURL& url)
 	LevelInfo->bHighDetailMode() = true;
 	LevelInfo->NetMode() = 0; // NM_StandAlone
 	LevelInfo->DefaultTexture() = engine->DefaultTexture;
-
-	// LevelInfo->URL is not serialized, so it is
-	// never restored by loading the save package and must be rebuilt
-	std::string realMapName = packages->GetIniValue("user", "SaveGame", "MapName" + std::to_string(slotNum));
-	if (realMapName.empty())
-		realMapName = LevelPackage->GetPackageName().ToString();
-	LevelInfo->URL = UnrealURL(realMapName);
+	LevelInfo->LevelAction() = 0; // LEVACT_None: the level was written while it showed LEVACT_Saving
 
 	GetLevelObject();
+
+	// The level keeps the URL it was playing under (UE1's ULevel::URL, written by SaveGameToSlot).
+	// Older saves don't have it, so fall back to the map name recorded in the user ini.
+	if (!Level->Map.empty())
+	{
+		LevelInfo->URL = UnrealURL(Level->Map);
+		LevelInfo->URL.Portal = Level->Portal;
+		LevelInfo->URL.Options = Level->Options;
+	}
+	else
+	{
+		std::string realMapName = packages->GetIniValue("user", "SaveGame", "MapName" + std::to_string(slotNum));
+		if (realMapName.empty())
+			realMapName = LevelPackage->GetPackageName().ToString();
+		LevelInfo->URL = UnrealURL(realMapName);
+	}
 
 	LinkActorsToLevel();
 
@@ -828,6 +869,8 @@ void Engine::LoadFromSaveFile(const UnrealURL& url)
 	GameInfo = UObject::Cast<UGameInfo>(LevelInfo->Game());
 	if (!GameInfo)
 		Exception::Throw("Save file has no GameInfo actor for " + LevelPackage->GetPackageName().ToString() + "!");
+
+	return true;
 }
 
 void Engine::PossessSavedPlayer()
@@ -836,14 +879,25 @@ void Engine::PossessSavedPlayer()
 	// which always spawns a brand new pawn. The save package already contains the actual saved
 	// pawn - deserialized with its real position, health and inventory - sitting in
 	// Level->Actors. Find and possess that one directly instead.
+	// Brother Bear has several player pawns in a level (Kenai, and Koda who follows him); like its
+	// GameInfo.Login, take the one marked bIsMainPlayer.
 	UPlayerPawn* pawn = nullptr;
 	for (UActor* actor : Level->Actors)
 	{
 		UPlayerPawn* p = UObject::TryCast<UPlayerPawn>(actor);
 		if (p && p->bIsPlayer())
 		{
-			pawn = p;
-			break;
+			if (!pawn)
+				pawn = p;
+
+			PropertyDataOffset mainPlayer = p->GetPropertyDataOffset("bIsMainPlayer");
+			if (mainPlayer.DataOffset == ~(size_t)0)
+				break;
+			if (p->BoolValue(mainPlayer))
+			{
+				pawn = p;
+				break;
+			}
 		}
 	}
 
@@ -864,6 +918,8 @@ void Engine::PossessSavedPlayer()
 	viewport->Actor() = pawn;
 	viewport->Actor()->Player() = viewport;
 	CallEvent(viewport->Actor(), EventName::Possess);
+
+	LogMessage("Loaded " + pawn->Name.ToString() + " at " + std::to_string(pawn->Location().x) + " " + std::to_string(pawn->Location().y) + " " + std::to_string(pawn->Location().z));
 
 	render->OnMapLoaded();
 }
@@ -908,14 +964,64 @@ void Engine::SaveGameToSlot(int32_t slotNum, const std::string& saveDescription)
 	}
 	else
 	{
-		const std::string saveFileName = "Save" + std::to_string(slotNum) + "." + packages->GetSaveExtension();
-		const std::string saveFileFullPath = (saveFolderPath / saveFileName).string();
-		LevelPackage->Save(Level, saveFileFullPath);
+		const fs::path saveFileFullPath = saveFolderPath / GetSaveFileName(slotNum);
+		if (!fs::exists(saveFileFullPath.parent_path()))
+			fs::create_directories(saveFileFullPath.parent_path());
 
-		// The save package is later reloaded by its slot filename ("SaveN"), not by the original
-		// map name, so record the real map name here for LoadFromSaveFile() to recover.
-		packages->SetIniValue("user", "SaveGame", "MapName" + std::to_string(slotNum), Level->package->GetPackageName().ToString());
+		LogMessage("Saving game... filename: " + saveFileFullPath.string());
+
+		// As UE1's UGameEngine::SaveGame: the level shows that it is saving while it is written, and
+		// KnowWonder's engine tells every actor before and after (PreSaveGame and PostSaveGame).
+		// The level also keeps the URL it is playing under (ULevel::URL), so that loading can restore it.
+		Array<UActor*> actors = Level->Actors;
+		for (UActor* actor : actors)
+		{
+			if (actor)
+				CallEvent(actor, "PreSaveGame");
+		}
+
+		Level->Protocol = LevelInfo->URL.Protocol;
+		Level->Host = LevelInfo->URL.Host;
+		Level->Port = LevelInfo->URL.Port;
+		Level->Map = LevelInfo->URL.Map;
+		Level->Portal = LevelInfo->URL.Portal;
+		Level->Options = LevelInfo->URL.Options;
+
+		LevelInfo->LevelAction() = 2; // LEVACT_Saving
+		LevelPackage->Save(Level, saveFileFullPath.string());
+		LevelInfo->LevelAction() = 0; // LEVACT_None
+
+		// The package writer keeps the previous file as a backup; a saved game only has the one file
+		std::error_code ec;
+		fs::remove(saveFileFullPath.string() + ".old", ec);
+
+		if (viewport->Actor())
+		{
+			const vec3& loc = viewport->Actor()->Location();
+			LogMessage("Saved " + viewport->Actor()->Name.ToString() + " at " + std::to_string(loc.x) + " " + std::to_string(loc.y) + " " + std::to_string(loc.z));
+		}
+
+		// Saves made before the level kept its URL are reloaded by their file name ("SaveN"), not by
+		// the original map name, so the real map name is still recorded here for LoadFromSaveFile().
+		packages->SetIniValue("user", "SaveGame", "MapName" + std::to_string(slotNum), fs::path(LevelInfo->URL.Map).stem().string());
+
+		actors = Level->Actors;
+		for (UActor* actor : actors)
+		{
+			if (actor)
+				CallEvent(actor, "PostSaveGame");
+		}
 	}
+}
+
+std::string Engine::GetSaveFileName(int32_t slotNum) const
+{
+	// Save files are SaveN.usa in the save folder. Brother Bear's launcher picks a slot folder for
+	// the whole session, Save\SlotN, with -SAVESLOT=N (--saveslot here).
+	std::string name = "Save" + std::to_string(slotNum) + "." + packages->GetSaveExtension();
+	if (LaunchInfo.saveSlot >= 0)
+		name = "Slot" + std::to_string(LaunchInfo.saveSlot) + "/" + name;
+	return name;
 }
 
 std::map<std::string, std::string> Engine::CreateTravelInfo(bool transferItems)
@@ -1350,6 +1456,21 @@ std::string Engine::ConsoleCommand(UObject* context, const std::string& commandl
 		//LogMessage("SaveGame command not fully implemented yet!");
 		return {};
 	}
+	else if (command == "loadgame" && args.size() == 2)
+	{
+		// Brother Bear reloads the last save this way when Kenai dies; the load happens at the end of the tick
+		int32_t slotNum;
+		try
+		{
+			slotNum = Convert::to_int32(args[1]);
+		}
+		catch (...)
+		{
+			return {};
+		}
+		ClientTravel("?load=" + std::to_string(slotNum), ETravelType::TRAVEL_Absolute, false);
+		return {};
+	}
 	else if (command == "get" && args.size() == 3)
 	{
 		NameString className = ParseClassName(args[1]);
@@ -1702,7 +1823,7 @@ void Engine::OnWindowMouseMove(const Point& pos)
 
 	if (engine->LaunchInfo.ue1Version > 219)
 	{
-		viewport->WindowsMouseX() = (float)(pos.x * window->GetDpiScale());
+		viewport->WindowsMouseX() = (float)(pos.x * window->GetDpiScale() - render->GetCanvasLeft());
 		viewport->WindowsMouseY() = (float)(pos.y * window->GetDpiScale());
 	}
 }
