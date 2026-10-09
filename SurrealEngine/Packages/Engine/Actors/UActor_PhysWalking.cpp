@@ -93,6 +93,11 @@ void UActor::TickWalking(float elapsed)
 			timeLeft -= timeLeft * hit.Fraction;
 			moveDelta = vel * timeLeft;
 
+			// Brother Bear: before stepping up, KnowWonder's engine checks whether the wall is a ledge to climb.
+			// When it is, the script takes over the movement (state Mounting), so this tick ends here.
+			if (hit.Fraction < 1.0f && engine->LaunchInfo.IsBrotherBear() && pawn->MountKW(vec3(0.0f, 0.0f, -gravityDirection), hit))
+				return;
+
 			//check for fall and backtrack
 			if (ShouldAbortJumping(pawn, oldPosition, stepDownDelta))
 				return;
@@ -177,4 +182,81 @@ void UActor::TickWalking(float elapsed)
 
 	RecomputeVelocityFromDisplacement(elapsed);
 	Velocity().z = 0.0f;
+}
+
+// Brother Bear (KnowWonder) auto-mounting. Walking physics (before a step up) and falling physics (on hitting a wall)
+// ask this whether the wall in front of the pawn is a ledge it can climb. If so, the pawn is based on what it hit and
+// gets the script event Mount with the offset from its location to where it will stand on top of the ledge; the
+// game's Mounting state then plays Climb32/64/96 with root motion. The rules, from KnowWonder's Engine.dll:
+// - the pawn has a MaxMountHeight, and the hit is a wall (normal Z between -0.1 and 0.7) that the pawn is facing;
+// - the polygon hit belongs to the level or a mover and carries poly flag 0x1000 (UE1's PF_BigWavy slot, which the
+//   game's maps use to mark climbable walls);
+// - a cylinder dropped from MaxMountHeight above the pawn, two collision heights into the wall, lands on the ledge;
+// - the ledge is at least MaxStepHeight above the pawn (any height while falling);
+// - the way up to MaxMountHeight (skipped with bClimbSpecial) and from there over to the ledge is free.
+bool UPawn::MountKW(const vec3& up, const CollisionHit& hit)
+{
+	float mountHeight = MaxMountHeight();
+	if (mountHeight <= 0.0f)
+		return false;
+
+	if (hit.Normal.z <= -0.1f || hit.Normal.z >= 0.7f)
+		return false;
+
+	vec3 facing = Coords::Rotation(Rotation()).XAxis;
+	if (dot(facing, hit.Normal) >= 0.0f)
+		return false;
+
+	// Only the level or a mover's brush can be climbed
+	if (hit.Actor && !hit.Actor->Brush())
+		return false;
+
+	// Find the polygon that was hit with a line from the pawn's center into the wall
+	bool climbable = false;
+	float probeLength = std::max(CollisionRadius(), CollisionHeight()) * 2.0f;
+	for (const CollisionHit& probe : XLevel()->Collision.Trace(Location(), Location() - hit.Normal * probeLength, 0.0f, 0.0f, true, true, false))
+	{
+		if (probe.Actor != hit.Actor)
+			continue;
+		UModel* model = probe.Actor ? probe.Actor->Brush() : XLevel()->Model;
+		if (!model || !probe.Node || probe.Node->Surf < 0 || (size_t)probe.Node->Surf >= model->Surfaces.size())
+			break;
+		uint32_t polyFlags = model->Surfaces[probe.Node->Surf].PolyFlags;
+		if (polyFlags & PF_NotSolid) // Decals and foliage in front of the wall don't count
+			continue;
+		climbable = (polyFlags & 0x1000) != 0;
+		break;
+	}
+	if (!climbable)
+		return false;
+
+	vec3 extents(CollisionRadius(), CollisionRadius(), CollisionHeight());
+	vec3 intoWall = normalize(vec3(-hit.Normal.x, -hit.Normal.y, 0.0f));
+	TraceFlags flags;
+	flags.movers = true;
+	flags.world = true;
+
+	// Drop a cylinder onto the ledge from above
+	vec3 top = Location() + up * mountHeight;
+	vec3 dropStart = top + intoWall * (mountHeight * hit.Normal.z + 2.0f * CollisionHeight());
+	vec3 dropEnd = Location() + intoWall * (2.0f * CollisionHeight());
+	CollisionHit ledgeHit = XLevel()->Collision.TraceFirstHit(dropStart, dropEnd, this, extents, flags);
+	if (ledgeHit.Fraction >= 1.0f)
+		return false;
+	vec3 ledge = dropStart + (dropEnd - dropStart) * ledgeHit.Fraction;
+
+	float minHeight = Physics() == PHYS_Falling ? 0.0f : MaxStepHeight();
+	if (ledge.z - Location().z < minHeight)
+		return false;
+
+	vec3 dest = ledge + vec3(0.0f, 0.0f, 2.0f);
+
+	if (!bClimbSpecial() && XLevel()->Collision.TraceFirstHit(Location(), top, this, extents, flags).Fraction < 1.0f)
+		return false;
+	if (XLevel()->Collision.TraceFirstHit(top, dest, this, extents, flags).Fraction < 1.0f)
+		return false;
+
+	SetBase(hit.Actor ? hit.Actor : Level(), true);
+	CallEvent(this, "Mount", { ExpressionValue::VectorValue(dest - Location()) });
+	return true;
 }

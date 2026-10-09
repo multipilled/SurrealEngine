@@ -87,7 +87,15 @@ void UActor::TickFalling(float elapsed)
 
 		if (hit.Fraction < 1.0f)
 		{
-			if (hit.Actor && hit.Actor->IsA("Pawn"))
+			// Brother Bear: falling against a wall may start a climb onto the ledge above (KnowWonder's engine checks
+			// this before HitWall). The script then leaves PHYS_Falling, so nothing more may move the pawn this tick.
+			if (pawn && !bBounce() && engine->LaunchInfo.IsBrotherBear() && pawn->MountKW(vec3(0.0f, 0.0f, 1.0f), hit))
+			{
+				FireHitWall(hit);
+				if (Physics() != PHYS_Falling)
+					return;
+			}
+			else if (hit.Actor && hit.Actor->IsA("Pawn"))
 			{
 				// So projectiles don't think they hit a wall.
 			}
