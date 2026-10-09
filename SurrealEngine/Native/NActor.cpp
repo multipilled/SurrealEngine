@@ -1272,10 +1272,8 @@ void NActor::CreateAnimChannel_BB(UObject* Self, UObject* NewClass, uint8_t Type
 
 void NActor::BoneRot_BB(UObject* Self, const NameString& Bone, Rotator& ReturnValue)
 {
-	// Skeletal bone transforms are not available yet (see UActor::BonePos)
-	LogUnimplemented("Actor.BoneRot");
 	UActor* SelfActor = UObject::Cast<UActor>(Self);
-	ReturnValue = SelfActor->Rotation();
+	ReturnValue = SelfActor->BoneRot(Bone);
 }
 
 void NActor::IsSoftwareRendering_BB(UObject* Self, BitfieldBool& ReturnValue)
