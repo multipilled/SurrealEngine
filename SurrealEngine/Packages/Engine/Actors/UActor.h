@@ -483,7 +483,7 @@ public:
 	// Harry Potter
 	void PlayAnim_HP(const NameString& Sequence, std::optional<float> Rate, std::optional<float> TweenTime, std::optional<EAnimType> Type, std::optional<NameString> RootBone);
 	void LoopAnim_HP(const NameString& Sequence, std::optional<float> Rate, std::optional<float> TweenTime, std::optional<float> MinRate, std::optional<EAnimType> Type, std::optional<NameString> RootBone);
-	BoundingBox GetWorldCollisionBox(bool bVisual);
+	void GetWorldCollisionBox(bool bVisual, vec3& boxMin, vec3& boxMax);
 	vec3 GetRenderExtent();
 	UActor* CreateAnimChannel(UClass* NewClass, EAnimType Type, const NameString& RootBone, bool bTransient, bool bNotReplaceable = false);
 	int BoneNumber(const NameString& Bone);

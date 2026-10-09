@@ -1090,8 +1090,12 @@ void NActor::FinishAnim_HP(UObject* Self, std::optional<NameString> RootBone)
 
 void NActor::GetWorldCollisionBox(UObject* Self, std::optional<bool> bVisual, BoundingBox& ReturnValue)
 {
+	// The script struct is { vector Min, Max; byte IsValid; }
+	struct ScriptBox { vec3 Min; vec3 Max; uint8_t IsValid; };
+	ScriptBox& box = reinterpret_cast<ScriptBox&>(ReturnValue);
 	UActor* SelfActor = UObject::Cast<UActor>(Self);
-	ReturnValue = SelfActor->GetWorldCollisionBox(bVisual.has_value() ? bVisual.value() : false);
+	SelfActor->GetWorldCollisionBox(bVisual.has_value() ? bVisual.value() : false, box.Min, box.Max);
+	box.IsValid = 1;
 }
 
 void NActor::GetRenderExtent(UObject* Self, vec3& ReturnValue)

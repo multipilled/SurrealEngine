@@ -4,6 +4,7 @@
 #include "Utils/File.h"
 #include "Utils/StrTools.h"
 #include "Utils/SHA1Sum.h"
+#include <set>
 #include "Render/RenderSubsystem.h"
 #include "Package/PackageManager.h"
 #include "Package/ObjectStream.h"
@@ -1024,7 +1025,87 @@ void Engine::LoginPlayer()
 	CallEvent(pawn, EventName::TravelPostAccept);
 	CallEvent(LevelInfo->Game(), EventName::PostLogin, { ExpressionValue::ObjectValue(pawn) });
 
+	if (LaunchInfo.IsBrotherBear())
+		ScreenActorsByGameState(pawn);
+
 	render->OnMapLoaded();
+}
+
+void Engine::ScreenActorsByGameState(UPlayerPawn* pawn)
+{
+	// KnowWonder's game states. The player carries CurrentGameState from level to level (a travel string, changed by
+	// SetGameState for the next level load) and GameStateMasterList names every state. An actor whose editor Group
+	// lists states (such as "None,GState010,IceRunIntro") only exists in those states, and ExcludeGameStates takes it
+	// out of the states it lists. Once the player has arrived, every actor gets bInCurrentGameState and the
+	// OnResolveGameState event; scripts hide what is out (CutScenes stay disabled).
+	// The player's default state is "None", which is not in the master list (SetGameState only accepts listed ones):
+	// until a state has been set, nothing is screened out.
+	if (!pawn->HasProperty("CurrentGameState") || !pawn->HasProperty("GameStateMasterList"))
+		return;
+
+	auto upper = [](std::string s) { for (char& c : s) c = (char)std::toupper((unsigned char)c); return s; };
+	auto split = [](const std::string& s) {
+		Array<std::string> tokens;
+		size_t start = 0;
+		while (start <= s.size())
+		{
+			size_t end = s.find(',', start);
+			if (end == std::string::npos)
+				end = s.size();
+			std::string token = s.substr(start, end - start);
+			while (!token.empty() && token.front() == ' ') token.erase(0, 1);
+			while (!token.empty() && token.back() == ' ') token.pop_back();
+			if (!token.empty())
+				tokens.push_back(token);
+			start = end + 1;
+		}
+		return tokens;
+	};
+
+	std::string current = upper(*static_cast<std::string*>(pawn->GetProperty("CurrentGameState")));
+	std::set<std::string> states;
+	for (const std::string& token : split(upper(*static_cast<std::string*>(pawn->GetProperty("GameStateMasterList")))))
+		states.insert(token);
+
+	int outCount = 0;
+	for (UActor* actor : Level->Actors)
+	{
+		if (!actor || actor->bDeleteMe() || !actor->HasProperty("bInCurrentGameState"))
+			continue;
+
+		bool inState = true;
+		if (states.count(current))
+		{
+			bool listsStates = false, listsCurrent = false;
+			for (const std::string& token : split(upper(actor->Group().ToString())))
+			{
+				if (states.count(token))
+				{
+					listsStates = true;
+					if (token == current)
+						listsCurrent = true;
+				}
+			}
+			if (listsStates && !listsCurrent)
+				inState = false;
+
+			if (actor->HasProperty("ExcludeGameStates") && upper(*static_cast<std::string*>(actor->GetProperty("ExcludeGameStates"))).find(current) != std::string::npos)
+				inState = false;
+		}
+
+		actor->SetBool("bInCurrentGameState", inState);
+		if (!inState)
+			outCount++;
+	}
+
+	LogMessage("Game state " + (current.empty() ? std::string("(none)") : current) + ": " + std::to_string(outCount) + " actors are out of it");
+
+	for (size_t i = 0; i < Level->Actors.size(); i++)
+	{
+		UActor* actor = Level->Actors[i];
+		if (actor && !actor->bDeleteMe() && actor->HasProperty("bInCurrentGameState"))
+			CallEvent(actor, "OnResolveGameState");
+	}
 }
 
 UZoneInfo* Engine::GetZoneActor(int zoneIndex)
