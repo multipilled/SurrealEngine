@@ -489,6 +489,7 @@ public:
 	int BoneNumber(const NameString& Bone);
 	NameString BoneName(int Bone);
 	vec3 BonePos(const NameString& Bone);
+	Rotator BoneRot(const NameString& Bone);
 	UTexture* CreateTextureFromScreenShot(UViewport* vport);
 	UTexture* CreateTextureFromBMP(const std::string& name, const std::string& filename);
 	bool SaveObjectAsFile(const std::string& dir, UObject* object);
@@ -594,6 +595,15 @@ public:
 		Array<vec3> Positions;
 	} SkelPose;
 
+	// Brother Bear root motion (bAnimMove): where the animation's root bone was at the last tick
+	struct
+	{
+		NameString Sequence;
+		float Frame = 0.0f;
+		vec3 LastRoot = vec3(0.0f);
+		bool Valid = false;
+	} RootMotionKW;
+
 	int LastDrawFrame = -1;
 
 	float SleepTimeLeft = 0.0f;
@@ -616,6 +626,7 @@ public:
 	// Brother Bear (KnowWonder) animation
 	bool PlayAnimKW(const NameString& sequence, bool loop, float rate, float tweenTime, float minRate, EAnimType type, NameString rootBone);
 	void TickAnimationKW(float elapsed);
+	void TickRootMotionKW();
 	MeshAnimSeq* FindAnimSeqKW(const NameString& sequence);
 	UActor* FindAnimChannelKW(const NameString& rootBone);
 	void StopAnimChannelsKW(int rootBone, bool allBones);
