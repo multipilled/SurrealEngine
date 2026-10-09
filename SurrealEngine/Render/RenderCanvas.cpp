@@ -22,12 +22,18 @@ void RenderSubsystem::ResetCanvas()
 	int vertResolution = engine->LaunchInfo.ue1Version < 400 ? 768 : 960;
 	Canvas.uiscale = std::max((engine->viewport->ViewportHeight() + vertResolution / 2) / vertResolution, 1);
 
+	// Brother Bear's HUD and menus are laid out for 4:3 (the original only offered 4:3 display modes, and its
+	// menu scales the UI by width alone), so on a wider viewport the canvas is a centered 4:3 area.
+	int canvasWidth = engine->viewport->ViewportWidth();
+	if (engine->LaunchInfo.IsBrotherBear())
+		canvasWidth = std::min(canvasWidth, (int)std::round(engine->viewport->ViewportHeight() * (4.0f / 3.0f)));
+
 	SceneNode frame;
-	Canvas.Frame.XB = 0;
+	Canvas.Frame.XB = (engine->viewport->ViewportWidth() - canvasWidth) / 2;
 	Canvas.Frame.YB = 0;
-	Canvas.Frame.X = engine->viewport->ViewportWidth();
+	Canvas.Frame.X = canvasWidth;
 	Canvas.Frame.Y = engine->viewport->ViewportHeight();
-	Canvas.Frame.FX = (float)engine->viewport->ViewportWidth();
+	Canvas.Frame.FX = (float)canvasWidth;
 	Canvas.Frame.FY = (float)engine->viewport->ViewportHeight();
 	Canvas.Frame.FX2 = Canvas.Frame.FX * 0.5f;
 	Canvas.Frame.FY2 = Canvas.Frame.FY * 0.5f;
@@ -40,7 +46,7 @@ void RenderSubsystem::ResetCanvas()
 	float RFY2 = 2.0f * RProjZ * Aspect / Canvas.Frame.FY;
 	Canvas.Frame.Projection = mat4::frustum(-RProjZ, RProjZ, -Aspect * RProjZ, Aspect * RProjZ, 1.0f, 32768.0f, handedness::left, clipzrange::zero_positive_w);
 
-	int sizeX = (int)(engine->viewport->ViewportWidth() / (float)Canvas.uiscale);
+	int sizeX = (int)(canvasWidth / (float)Canvas.uiscale);
 	int sizeY = (int)(engine->viewport->ViewportHeight() / (float)Canvas.uiscale);
 	engine->canvas->CurX() = 0.0f;
 	engine->canvas->CurY() = 0.0f;
