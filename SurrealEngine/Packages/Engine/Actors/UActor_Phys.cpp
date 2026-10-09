@@ -8,6 +8,7 @@
 #include "Packages/Engine/Actors/Info/ULevelInfo.h"
 #include "Packages/Engine/Resources/Level/ULevel.h"
 #include "Packages/Engine/Resources/Level/UModel.h"
+#include "Packages/Engine/Resources/Mesh/UMesh.h"
 
 void UActor::TickPhysics(float elapsed)
 {
@@ -311,10 +312,49 @@ bool UActor::IsOverlapping(UActor* other)
 	return XLevel()->Collision.IsOverlapping(this, other);
 }
 
-BoundingBox UActor::GetWorldCollisionBox(bool bVisual)
+void UActor::GetWorldCollisionBox(bool bVisual, vec3& boxMin, vec3& boxMax)
 {
-	LogUnimplemented("Actor.GetWorldCollisionBox");
-	return {};
+	// World-space bounds of the collision primitive. The KnowWonder games choose it with CollideType:
+	// 0 aligned cylinder (CollisionWidth is a vertical offset), 1 oriented cylinder, 2 oriented box (Radius/Width/Height),
+	// 3 shape, 4 aligned oval cylinder (Width is the X radius), 5 oriented oval cylinder.
+	// bVisual asks for the bounds of what is drawn instead. To do: CT_Shape should use the mesh primitive.
+	if (bVisual && (EDrawType)DrawType() == DT_Mesh && Mesh() && Mesh()->BoundingBox.min != Mesh()->BoundingBox.max)
+	{
+		mat4 objectToWorld = mat4::translate(Location() + PrePivot()) * Coords::Rotation(Rotation()).ToMatrix() * mat4::scale(DrawScale());
+		BBox bbox = Mesh()->BoundingBox.transform(objectToWorld * Mesh()->meshToObject);
+		boxMin = bbox.min;
+		boxMax = bbox.max;
+		return;
+	}
+
+	uint8_t collideType = HasProperty("CollideType") ? *static_cast<uint8_t*>(GetProperty("CollideType")) : 0;
+	float width = HasProperty("CollisionWidth") ? *static_cast<float*>(GetProperty("CollisionWidth")) : CollisionRadius();
+
+	vec3 center = Location();
+	vec3 extents(CollisionRadius(), CollisionRadius(), CollisionHeight());
+	bool oriented = false;
+	switch (collideType)
+	{
+	default:
+	case 0: if (HasProperty("CollisionWidth")) center.z += width; break;
+	case 1: oriented = true; break;
+	case 2: case 3: extents = vec3(CollisionRadius(), width, CollisionHeight()); oriented = true; break;
+	case 4: extents = vec3(width, CollisionRadius(), CollisionHeight()); break;
+	case 5: extents = vec3(width, CollisionRadius(), CollisionHeight()); oriented = true; break;
+	}
+
+	if (oriented)
+	{
+		vec3 x, y, z;
+		Coords::Rotation(Rotation()).GetAxes(x, y, z);
+		extents = vec3(
+			std::abs(x.x) * extents.x + std::abs(y.x) * extents.y + std::abs(z.x) * extents.z,
+			std::abs(x.y) * extents.x + std::abs(y.y) * extents.y + std::abs(z.y) * extents.z,
+			std::abs(x.z) * extents.x + std::abs(y.z) * extents.y + std::abs(z.z) * extents.z);
+	}
+
+	boxMin = center - extents;
+	boxMax = center + extents;
 }
 
 UObject* UActor::Trace(vec3& hitLocation, vec3& hitNormal, const vec3& traceEnd, const vec3& traceStart, bool bTraceActors, const vec3& extent)
