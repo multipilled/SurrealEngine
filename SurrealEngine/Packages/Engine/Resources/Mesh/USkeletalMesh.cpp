@@ -285,7 +285,7 @@ void USkeletalMesh::ApplyAnim(UActor* actor, UActor* target)
 	}
 }
 
-void USkeletalMesh::GetPose(UActor* actor, int frame, Array<vec3>& outPoints, Array<vec3>& outNormals)
+void USkeletalMesh::UpdateBoneTransforms(UActor* actor, int frame)
 {
 	if (actor->SkelPose.Mesh != this || actor->SkelPose.Frame != frame)
 	{
@@ -330,6 +330,25 @@ void USkeletalMesh::GetPose(UActor* actor, int frame, Array<vec3>& outPoints, Ar
 			bone.t.z = parent.m[2][0] * p.x + parent.m[2][1] * p.y + parent.m[2][2] * p.z + parent.t.z;
 		}
 	}
+}
+
+bool USkeletalMesh::GetBoneCoordsKW(UActor* actor, int frame, int bone, vec3& outOrigin, vec3& outXAxis, vec3& outYAxis, vec3& outZAxis)
+{
+	if (bone < 0 || (size_t)bone >= RefSkeleton.size())
+		return false;
+
+	UpdateBoneTransforms(actor, frame);
+	const BoneTransform& transform = BoneTransforms[bone];
+	outOrigin = transform.t;
+	outXAxis = vec3(transform.m[0][0], transform.m[1][0], transform.m[2][0]);
+	outYAxis = vec3(transform.m[0][1], transform.m[1][1], transform.m[2][1]);
+	outZAxis = vec3(transform.m[0][2], transform.m[1][2], transform.m[2][2]);
+	return true;
+}
+
+void USkeletalMesh::GetPose(UActor* actor, int frame, Array<vec3>& outPoints, Array<vec3>& outNormals)
+{
+	UpdateBoneTransforms(actor, frame);
 
 	// Skin the points
 	outPoints.clear();

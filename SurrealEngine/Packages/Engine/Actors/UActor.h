@@ -489,6 +489,7 @@ public:
 	int BoneNumber(const NameString& Bone);
 	NameString BoneName(int Bone);
 	vec3 BonePos(const NameString& Bone);
+	Rotator BoneRot(const NameString& Bone);
 	UTexture* CreateTextureFromScreenShot(UViewport* vport);
 	UTexture* CreateTextureFromBMP(const std::string& name, const std::string& filename);
 	bool SaveObjectAsFile(const std::string& dir, UObject* object);

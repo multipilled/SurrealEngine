@@ -9,6 +9,7 @@
 #include "Package/PackageManager.h"
 #include "Engine.h"
 #include "Math/coords.h"
+#include "Render/RenderSubsystem.h"
 
 bool UActor::HasAnim(const NameString& sequence)
 {
@@ -762,10 +763,57 @@ NameString UActor::BoneName(int Bone)
 	return {};
 }
 
+// The transform a skeletal mesh is drawn with (see VisibleMesh)
+static mat4 MeshToWorld(UActor* actor, UMesh* mesh)
+{
+	return mat4::translate(actor->Location() + actor->PrePivot()) * Coords::Rotation(actor->Rotation()).ToMatrix() * mat4::scale(actor->DrawScale()) * mesh->meshToObject;
+}
+
+// Like Unreal's FCoords::OrthoRotation: yaw and pitch point along the X axis, then the roll turns the Y axis into place
+static Rotator OrthoRotation(const vec3& xAxis, const vec3& yAxis)
+{
+	Rotator rotation = Rotator::FromVector(xAxis);
+	mat4 noRoll = Coords::Rotation(rotation).ToMatrix();
+	vec3 noRollY = (noRoll * vec4(0.0f, 1.0f, 0.0f, 0.0f)).xyz();
+	vec3 noRollZ = (noRoll * vec4(0.0f, 0.0f, 1.0f, 0.0f)).xyz();
+	int roll = (int)(std::atan2(dot(yAxis, noRollZ), dot(yAxis, noRollY)) * (32768.0f / 3.14159265359f));
+
+	// Take the roll direction that matches the rotation convention
+	Rotator a = rotation, b = rotation;
+	a.Roll = roll;
+	b.Roll = -roll;
+	vec3 aY = (Coords::Rotation(a).ToMatrix() * vec4(0.0f, 1.0f, 0.0f, 0.0f)).xyz();
+	vec3 bY = (Coords::Rotation(b).ToMatrix() * vec4(0.0f, 1.0f, 0.0f, 0.0f)).xyz();
+	return dot(aY, yAxis) >= dot(bY, yAxis) ? a : b;
+}
+
+// A bone's location in the world, in the pose being drawn. Actors without a skeletal mesh return their own location,
+// and a bone the mesh doesn't have gives the mesh's origin.
 vec3 UActor::BonePos(const NameString& Bone)
 {
-	LogUnimplemented("Actor.BonePos");
-	return vec3(0.0f);
+	USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh());
+	if (!mesh)
+		return Location();
+
+	vec3 origin(0.0f), xAxis, yAxis, zAxis;
+	mesh->GetBoneCoordsKW(this, engine->render->TextureFrameCounter, BoneNumber(Bone), origin, xAxis, yAxis, zAxis);
+	return (MeshToWorld(this, mesh) * vec4(origin, 1.0f)).xyz();
+}
+
+// A bone's rotation in the world, in the pose being drawn. Actors without a skeletal mesh return their own rotation,
+// and a bone the mesh doesn't have gives the mesh's rotation.
+Rotator UActor::BoneRot(const NameString& Bone)
+{
+	USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh());
+	if (!mesh)
+		return Rotation();
+
+	vec3 origin, xAxis(1.0f, 0.0f, 0.0f), yAxis(0.0f, 1.0f, 0.0f), zAxis(0.0f, 0.0f, 1.0f);
+	mesh->GetBoneCoordsKW(this, engine->render->TextureFrameCounter, BoneNumber(Bone), origin, xAxis, yAxis, zAxis);
+	mat4 meshToWorld = MeshToWorld(this, mesh);
+	vec3 worldX = (meshToWorld * vec4(xAxis, 0.0f)).xyz();
+	vec3 worldY = (meshToWorld * vec4(yAxis, 0.0f)).xyz();
+	return OrthoRotation(worldX, worldY);
 }
 
 UTexture* UActor::GetMultiskin(int index)
