@@ -7,6 +7,7 @@
 #include "Utils/File.h"
 #include "Utils/StrTools.h"
 #include <functional>
+#include <algorithm>
 
 #ifdef _MSC_VER
 #pragma warning(disable: 4267)
@@ -487,6 +488,73 @@ public:
 
 	openmpt::module* module;
 };
+
+// The "XA" sounds in Brother Bear are headerless 4-bit ADPCM using the CD-XA (PlayStation) prediction filters.
+// The data is a run of 15-byte frames of 28 mono samples: one byte with the filter in the high nibble and the
+// shift in the low nibble, then 14 bytes of signed 4-bit residuals, low nibble first. Sample count, rate and
+// channel count come from the sound header ahead of the data.
+class XAAudioSource : public AudioSource
+{
+public:
+	XAAudioSource(const Array<uint8_t>& filedata, int frequency, int channels, int sampleCount) : frequency(frequency)
+	{
+		if (channels != 1)
+			Exception::Throw("Only mono XA audio is supported");
+
+		static const int filters[4][2] = { { 0, 0 }, { 60, 0 }, { 115, -52 }, { 98, -55 } };
+
+		size_t frames = filedata.size() / 15;
+		samples.reserve(frames * 28);
+		int s1 = 0, s2 = 0;
+		for (size_t frame = 0; frame < frames; frame++)
+		{
+			const uint8_t* src = filedata.data() + frame * 15;
+			int filter = std::min(src[0] >> 4, 3);
+			int shift = std::min(src[0] & 15, 12);
+			int k0 = filters[filter][0];
+			int k1 = filters[filter][1];
+			for (int i = 0; i < 28; i++)
+			{
+				int nibble = (i & 1) ? (src[1 + i / 2] >> 4) : (src[1 + i / 2] & 15);
+				int residual = (int16_t)(nibble << 12) >> shift;
+				int sample = std::clamp(residual + ((s1 * k0 + s2 * k1 + 32) >> 6), -32768, 32767);
+				s2 = s1;
+				s1 = sample;
+				samples.push_back(sample * (1.0f / 32768.0f));
+			}
+		}
+
+		if (sampleCount > 0 && (size_t)sampleCount < samples.size())
+			samples.resize(sampleCount);
+	}
+
+	int GetFrequency() override { return frequency; }
+	int GetChannels() override { return 1; }
+	int GetSamples() override { return (int)samples.size(); }
+
+	void SeekToSample(uint64_t position) override
+	{
+		readPos = std::min((size_t)position, samples.size());
+	}
+
+	size_t ReadSamples(float* output, size_t count) override
+	{
+		count = std::min(count, samples.size() - readPos);
+		memcpy(output, samples.data() + readPos, count * sizeof(float));
+		readPos += count;
+		return count;
+	}
+
+private:
+	int frequency = 22050;
+	Array<float> samples;
+	size_t readPos = 0;
+};
+
+std::unique_ptr<AudioSource> AudioSource::CreateXA(const Array<uint8_t>& filedata, int frequency, int channels, int sampleCount)
+{
+	return std::make_unique<XAAudioSource>(filedata, frequency, channels, sampleCount);
+}
 
 std::unique_ptr<AudioSource> AudioSource::CreateMp3(Array<uint8_t> filedata)
 {

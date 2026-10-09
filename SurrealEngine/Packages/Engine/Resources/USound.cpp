@@ -76,10 +76,23 @@ void USound::GetSound()
 			LogMessage("Could not decode " + Name.ToString() + ": " + e.what());
 		}
 	}
+	else if (Format == "XA" && engine->LaunchInfo.IsBrotherBear())
+	{
+		try
+		{
+			int rate = KWInfo.SampleRate ? (int)KWInfo.SampleRate : 22050;
+			int numChannels = KWInfo.Channels ? (int)KWInfo.Channels : 1;
+			source = AudioSource::CreateXA(Data, rate, numChannels, (int)KWInfo.SampleCount);
+		}
+		catch (const std::exception& e)
+		{
+			LogMessage("Could not decode " + Name.ToString() + ": " + e.what());
+		}
+	}
 
 	if (!source && engine->LaunchInfo.IsBrotherBear())
 	{
-		// To do: decode "XA". Play silence of the right length for now.
+		// Unknown format or a decoding error: play silence of the right length.
 		static bool warned = false;
 		if (!warned)
 		{
