@@ -243,7 +243,11 @@ void Engine::Run()
 		UpdateAudio();
 
 		// A minimized window has no pixels to draw to
-		viewport->SetViewportRect(0, 0, engine->window->GetPixelWidth(), engine->window->GetPixelHeight());
+		// Brother Bear only had 4:3 display modes, so on a wider window its picture is centered (pillarboxed)
+		int viewWidth = engine->window->GetPixelWidth();
+		if (LaunchInfo.IsBrotherBear())
+			viewWidth = std::min(viewWidth, (int)std::round(engine->window->GetPixelHeight() * (4.0f / 3.0f)));
+		viewport->SetViewportRect((engine->window->GetPixelWidth() - viewWidth) / 2, 0, viewWidth, engine->window->GetPixelHeight());
 		if (engine->window->GetPixelWidth() > 0 && engine->window->GetPixelHeight() > 0)
 			render->DrawGame(levelElapsed);
 

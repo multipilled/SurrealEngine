@@ -29,7 +29,7 @@ void RenderSubsystem::ResetCanvas()
 		canvasWidth = std::min(canvasWidth, (int)std::round(engine->viewport->ViewportHeight() * (4.0f / 3.0f)));
 
 	SceneNode frame;
-	Canvas.Frame.XB = (engine->viewport->ViewportWidth() - canvasWidth) / 2;
+	Canvas.Frame.XB = engine->viewport->ViewportX() + (engine->viewport->ViewportWidth() - canvasWidth) / 2;
 	Canvas.Frame.YB = 0;
 	Canvas.Frame.X = canvasWidth;
 	Canvas.Frame.Y = engine->viewport->ViewportHeight();
