@@ -284,6 +284,10 @@ static void InitPropertyOffsets_Pawn(PackageManager* packages)
 		PropOffsets_Pawn.HuntOffDistance = cls->GetPropertyDataOffset("HuntOffDistance");
 		PropOffsets_Pawn.bDoAutoSerpentine = cls->GetPropertyDataOffset("bDoAutoSerpentine");
 	}
+
+	// Brother Bear (KnowWonder) additions; missing in other games, so only use them when IsBrotherBear()
+	PropOffsets_Pawn.MaxMountHeight = cls->GetPropertyDataOffset("MaxMountHeight");
+	PropOffsets_Pawn.bClimbSpecial = cls->GetPropertyDataOffset("bClimbSpecial");
 }
 
 PropertyOffsets_Actor PropOffsets_Actor;

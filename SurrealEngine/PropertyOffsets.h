@@ -243,6 +243,9 @@ struct PropertyOffsets_Pawn
 	PropertyDataOffset bIsCrawler;
 	PropertyDataOffset HuntOffDistance;
 	PropertyDataOffset bDoAutoSerpentine;
+	// Brother Bear (KnowWonder) additions
+	PropertyDataOffset MaxMountHeight;
+	PropertyDataOffset bClimbSpecial;
 };
 
 extern PropertyOffsets_Pawn PropOffsets_Pawn;
