@@ -54,6 +54,8 @@ GameLaunchInfo GameFolderSelection::GetLaunchInfo(int selectedGame)
 	info.gameName = commandline->GetArg("-g", "--game", info.gameName);
 	info.noEntryMap = commandline->HasArg("-n", "--noentrymap") || info.noEntryMap;
 	info.url = commandline->GetArg("-u", "--url", info.url);
+	info.saveSlot = commandline->GetArgInt("", "--saveslot", info.saveSlot);
+	info.loadGame = commandline->GetArgInt("", "--loadgame", info.loadGame);
 	return info;
 }
 

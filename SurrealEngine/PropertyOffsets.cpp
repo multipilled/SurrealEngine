@@ -858,6 +858,8 @@ static void InitPropertyOffsets_PlayerPawn(PackageManager* packages)
 	PropOffsets_PlayerPawn.shaketimer = cls->GetPropertyDataOffset("shaketimer");
 	PropOffsets_PlayerPawn.shakevert = cls->GetPropertyDataOffset("shakevert");
 	PropOffsets_PlayerPawn.verttimer = cls->GetPropertyDataOffset("verttimer");
+	PropOffsets_PlayerPawn.bQueuedToSaveGame = cls->GetPropertyDataOffset("bQueuedToSaveGame");
+	PropOffsets_PlayerPawn.OptionSaveScreenBMP = cls->GetPropertyDataOffset("OptionSaveScreenBMP");
 }
 
 PropertyOffsets_PlayerReplicationInfo PropOffsets_PlayerReplicationInfo;

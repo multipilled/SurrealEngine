@@ -1286,26 +1286,9 @@ void NActor::GetCurrentKeyState_BB(UObject* Self, uint8_t Key, BitfieldBool& Ret
 
 void NActor::SaveGameExists_BB(UObject* Self, BitfieldBool& ReturnValue)
 {
-	// Look for any save package in the save folder (or one folder below it)
-	ReturnValue = false;
-
+	// The original engine checks for save number 9 (the quick save) in the current save slot folder
 	std::error_code ec;
-	const fs::path folder = engine->packages->GetSaveFolderPath();
-	if (!fs::is_directory(folder, ec))
-		return;
-
-	const std::string ext = "." + engine->packages->GetSaveExtension();
-	for (fs::recursive_directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec))
-	{
-		if (it.depth() >= 1)
-			it.disable_recursion_pending();
-
-		if (it->is_regular_file(ec) && StrTools::equals_ignore_case(it->path().extension().string(), ext))
-		{
-			ReturnValue = true;
-			return;
-		}
-	}
+	ReturnValue = fs::is_regular_file(engine->packages->GetSaveFolderPath() / engine->GetSaveFileName(9), ec);
 }
 
 void NActor::TraceTexture_BB(UObject* Self, const vec3& TraceEnd, const vec3& TraceStart, int& Flags, std::optional<bool> bTraceDecals, UObject*& ReturnValue)

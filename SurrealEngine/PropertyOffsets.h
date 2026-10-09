@@ -787,6 +787,9 @@ struct PropertyOffsets_PlayerPawn
 	PropertyDataOffset shaketimer;
 	PropertyDataOffset shakevert;
 	PropertyDataOffset verttimer;
+	// KnowWonder (Brother Bear): set by script to ask the engine for a save at the end of the tick
+	PropertyDataOffset bQueuedToSaveGame;
+	PropertyDataOffset OptionSaveScreenBMP;
 };
 
 extern PropertyOffsets_PlayerPawn PropOffsets_PlayerPawn;
