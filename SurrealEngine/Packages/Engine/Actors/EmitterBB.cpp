@@ -6,6 +6,9 @@
 #include "Packages/Core/Properties/UStructProperty.h"
 #include "Packages/Engine/Resources/Level/ULevel.h"
 #include "Packages/Engine/Resources/Textures/UTexture.h"
+#include "Packages/Engine/Resources/Mesh/USkeletalMesh.h"
+#include "Render/RenderSubsystem.h"
+#include "Engine.h"
 #include "Collision/TopLevel/CollisionHit.h"
 #include "Math/coords.h"
 #include "Math/rotator.h"
@@ -19,6 +22,7 @@ namespace
 	enum EParticleStartLocationShape { PTLS_Box, PTLS_Sphere, PTLS_Polar, PTLS_All };
 	enum EParticleVelocityDirection { PTVD_None, PTVD_StartPositionAndOwner, PTVD_OwnerAndStartPosition, PTVD_AddRadial };
 	enum EParticleRotationSource { PTRS_None, PTRS_Actor, PTRS_Offset, PTRS_Normal };
+	enum EParticleMeshSpawning { PTMS_None, PTMS_Linear, PTMS_Random, PTMS_OwnerMesh };
 
 	const float TwoPi = 6.28318530718f;
 
@@ -355,6 +359,26 @@ bool EmitterBB::Update(UActor* actor, float elapsed)
 		}
 	}
 
+	// The actor's AutoReset restarts every sub-emitter once all of them are done. The first restart is immediate; after
+	// that the emitter waits a random TimeTillResetRange first. Each restart also picks a new random GlobalOffset.
+	if (!anyActive && !Killed && !autoDestroy && actor->GetBool("AutoReset"))
+	{
+		TimeTillReset -= elapsed;
+		if (TimeTillReset <= 0.0f)
+		{
+			RangeVector offsetRange = *static_cast<RangeVector*>(actor->GetProperty("GlobalOffsetRange"));
+			GlobalOffset = vec3(RandomRange(offsetRange.X.x, offsetRange.X.y), RandomRange(offsetRange.Y.x, offsetRange.Y.y), RandomRange(offsetRange.Z.x, offsetRange.Z.y));
+			vec2 resetRange = *static_cast<vec2*>(actor->GetProperty("TimeTillResetRange"));
+			TimeTillReset = RandomRange(resetRange.x, resetRange.y);
+			for (int i = 0; i < 4; i++)
+			{
+				if (SubEmitters[i].Initialized)
+					ResetSubEmitter(actor, i);
+			}
+			anyActive = true;
+		}
+	}
+
 	// Returns true when the actor should be destroyed
 	return !anyActive && (Killed || autoDestroy);
 }
@@ -410,7 +434,16 @@ void EmitterBB::UpdateSubEmitter(UActor* actor, int index, float elapsed)
 	RangeVector collisionDamping = settings.RangeVec("CollisionInfo", "DampingFactorRange");
 	bool useMaxCollisions = settings.Bool("CollisionInfo", "UseMaxCollisions");
 	vec2 maxCollisions = settings.Range("CollisionInfo", "MaxCollisions");
+	int spawnFromOther = settings.Int("CollisionInfo", "SpawnFromOtherEmitter");
+	int spawnAmount = settings.Int("CollisionInfo", "SpawnAmount");
+	bool useSpawnedVelocityScale = settings.Bool("CollisionInfo", "UseSpawnedVelocityScale");
+	RangeVector spawnedVelocityScale = settings.RangeVec("CollisionInfo", "SpawnedVelocityScaleRange");
 	vec3 center = actor->Location() + GlobalOffset;
+
+	// Collisions that make another sub-emitter spawn particles, handled after this sub-emitter's update
+	struct CollisionSpawn { vec3 Location, Normal; };
+	static Array<CollisionSpawn> collisionSpawns;
+	collisionSpawns.clear();
 
 	bool useVelocityScale = settings.Bool("VelocityInfo", "UseVelocityScale");
 	bool useRevolutionScale = useRevolution && settings.Bool("RevolutionInfo", "UseRevolutionScale");
@@ -493,12 +526,35 @@ void EmitterBB::UpdateSubEmitter(UActor* actor, int index, float elapsed)
 			if (hit.Fraction < 1.0f)
 			{
 				vec3 n = hit.Normal;
-				p.Location = p.OldLocation + (p.Location - p.OldLocation) * hit.Fraction + n * 0.5f;
+				vec3 hitLocation = p.OldLocation + (p.Location - p.OldLocation) * hit.Fraction;
+				if (spawnFromOther >= 0 && spawnFromOther < 4 && spawnAmount > 0)
+					collisionSpawns.push_back({ hitLocation + n * 0.01f, n });
+				p.Location = hitLocation + n * 0.5f;
 				vec3 d = vec3(RandomRange(collisionDamping.X.x, collisionDamping.X.y), RandomRange(collisionDamping.Y.x, collisionDamping.Y.y), RandomRange(collisionDamping.Z.x, collisionDamping.Z.y));
 				p.Velocity = (p.Velocity - n * (2.0f * dot(p.Velocity, n))) * d;
 				p.HitCount++;
 				if (useMaxCollisions && p.HitCount >= (int)std::round(maxCollisions.y))
 					p.Alive = false;
+			}
+		}
+	}
+
+	// CollisionInfo.SpawnFromOtherEmitter: every collision spawns SpawnAmount particles of that sub-emitter at the hit
+	// point, without the actor's location or global offset. UseSpawnedVelocityScale adds the hit normal, scaled by
+	// SpawnedVelocityScaleRange, to their velocity.
+	if (!collisionSpawns.empty() && SubEmitters[spawnFromOther].Initialized)
+	{
+		for (const CollisionSpawn& spawn : collisionSpawns)
+		{
+			for (int i = 0; i < spawnAmount; i++)
+			{
+				vec3 addVelocity(0.0f);
+				if (useSpawnedVelocityScale)
+				{
+					vec3 scale(RandomRange(spawnedVelocityScale.X.x, spawnedVelocityScale.X.y), RandomRange(spawnedVelocityScale.Y.x, spawnedVelocityScale.Y.y), RandomRange(spawnedVelocityScale.Z.x, spawnedVelocityScale.Z.y));
+					addVelocity = spawn.Normal * scale;
+				}
+				SpawnParticles(actor, spawnFromOther, 1, &spawn.Location, addVelocity);
 			}
 		}
 	}
@@ -564,7 +620,8 @@ void EmitterBB::UpdateSubEmitter(UActor* actor, int index, float elapsed)
 
 		if (allDead)
 		{
-			if (settings.Bool("LocalInfo", "AutoReset") && !Killed)
+			// The actor's AutoReset takes over from the sub-emitter's own (see Update)
+			if (settings.Bool("LocalInfo", "AutoReset") && !Killed && !actor->GetBool("AutoReset"))
 			{
 				vec2 resetTime = settings.Range("LocalInfo", "AutoResetTimeRange");
 				sub.ResetTimer = RandomRange(resetTime.x, resetTime.y);
@@ -577,7 +634,7 @@ void EmitterBB::UpdateSubEmitter(UActor* actor, int index, float elapsed)
 	}
 }
 
-void EmitterBB::SpawnParticles(UActor* actor, int index, int count)
+void EmitterBB::SpawnParticles(UActor* actor, int index, int count, const vec3* spawnLocation, const vec3& addVelocity)
 {
 	if (count <= 0)
 		return;
@@ -617,7 +674,14 @@ void EmitterBB::SpawnParticles(UActor* actor, int index, int count)
 	if (rotationSource == PTRS_Actor)
 		rotation += actor->Rotation();
 
-	vec3 center = actor->Location() + GlobalOffset;
+	vec3 center = spawnLocation ? *spawnLocation : actor->Location() + GlobalOffset;
+
+	// MeshSpawningInfo: particles start on a vertex of a mesh, picked in order or at random
+	static Array<vec3> meshPoints;
+	bool meshSpawning = GetMeshSpawningPoints(actor, index, meshPoints);
+	bool meshLinear = settings.Byte("MeshSpawningInfo", "MeshSpawning") == PTMS_Linear;
+	RangeVector meshScaleRange = settings.RangeVec("MeshSpawningInfo", "MeshScaleRange");
+	bool uniformMeshScale = settings.Bool("MeshSpawningInfo", "UniformMeshScale");
 
 	for (ParticleBB& p : sub.Particles)
 	{
@@ -646,6 +710,17 @@ void EmitterBB::SpawnParticles(UActor* actor, int index, int count)
 		}
 		offset += startOffset;
 
+		if (meshSpawning)
+		{
+			// The original never picks the mesh's last vertex
+			int vertexCount = (int)meshPoints.size() - 1;
+			int vertex = meshLinear ? sub.MeshSpawnCounter++ % vertexCount : clamp((int)(Random() * vertexCount), 0, vertexCount - 1);
+			vec3 scale(RandomRange(meshScaleRange.X.x, meshScaleRange.X.y), RandomRange(meshScaleRange.Y.x, meshScaleRange.Y.y), RandomRange(meshScaleRange.Z.x, meshScaleRange.Z.y));
+			if (uniformMeshScale)
+				scale = vec3(scale.x);
+			offset += meshPoints[vertex] * scale;
+		}
+
 		vec3 velocity(RandomRange(velocityRange.X.x, velocityRange.X.y), RandomRange(velocityRange.Y.x, velocityRange.Y.y), RandomRange(velocityRange.Z.x, velocityRange.Z.y));
 
 		if (rotate)
@@ -669,7 +744,7 @@ void EmitterBB::SpawnParticles(UActor* actor, int index, int count)
 			else
 				velocity += dir * radial;
 		}
-		p.Velocity = velocity;
+		p.Velocity = velocity + addVelocity;
 
 		p.StartSize.x = RandomRange(sizeRange.X.x, sizeRange.X.y);
 		p.StartSize.y = uniformSize ? p.StartSize.x : RandomRange(sizeRange.Y.x, sizeRange.Y.y);
@@ -696,6 +771,60 @@ void EmitterBB::SpawnParticles(UActor* actor, int index, int count)
 		p.Alive = true;
 		sub.SpawnedTotal++;
 	}
+}
+
+// The vertices a sub-emitter spawns its particles on, relative to the mesh actor and before its rotation and DrawScale,
+// as the particle's start offset is. PTMS_OwnerMesh takes the owner's current mesh and pose (falling back to
+// MeshSpawningStaticMesh when the owner has no mesh); the other modes take MeshSpawningStaticMesh. Without a mesh,
+// particles spawn as if mesh spawning were off.
+bool EmitterBB::GetMeshSpawningPoints(UActor* actor, int index, Array<vec3>& points)
+{
+	EmitterSettings settings(actor, index);
+	int mode = settings.Byte("MeshSpawningInfo", "MeshSpawning");
+	if (mode == PTMS_None)
+		return false;
+
+	UActor* meshActor = actor;
+	UMesh* mesh = nullptr;
+	if (mode == PTMS_OwnerMesh && actor->Owner() && actor->Owner()->Mesh())
+	{
+		meshActor = actor->Owner();
+		mesh = meshActor->Mesh();
+	}
+	else
+	{
+		mesh = UObject::TryCast<UMesh>(settings.Object("MeshSpawningInfo", "MeshSpawningStaticMesh"));
+	}
+	if (!mesh)
+		return false;
+
+	points.clear();
+	USkeletalMesh* skeletalMesh = UObject::TryCast<USkeletalMesh>(mesh);
+	if (skeletalMesh && skeletalMesh->Verts.empty())
+	{
+		// Brother Bear's skeletal meshes are posed from their bones, as the renderer does
+		UActor* animSource = meshActor;
+		if (meshActor->bAnimByOwner() && meshActor->Owner())
+			animSource = meshActor->Owner();
+		static Array<vec3> normals;
+		skeletalMesh->GetPose(animSource, engine->render ? engine->render->TextureFrameCounter : 0, points, normals);
+	}
+	else if (mesh->FrameVerts > 0 && mesh->Verts.size() >= (size_t)mesh->FrameVerts)
+	{
+		size_t start = 0;
+		if (MeshAnimSeq* seq = mesh->GetSequence(meshActor->AnimSequence()))
+		{
+			int frame = seq->StartFrame + clamp((int)(meshActor->AnimFrame() * seq->NumFrames), 0, std::max(seq->NumFrames - 1, 0));
+			start = (size_t)frame * mesh->FrameVerts;
+			if (start + mesh->FrameVerts > mesh->Verts.size())
+				start = 0;
+		}
+		points.assign(mesh->Verts.begin() + start, mesh->Verts.begin() + start + mesh->FrameVerts);
+	}
+
+	for (vec3& point : points)
+		point = (mesh->meshToObject * vec4(point, 1.0f)).xyz();
+	return points.size() > 1;
 }
 
 bool EmitterBB::GetSprites(UActor* actor, int index, Array<ParticleSpriteBB>& sprites, SpriteSettingsBB& out)
