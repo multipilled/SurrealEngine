@@ -8,6 +8,7 @@
 #include "Packages/Engine/Resources/Mesh/UAnimation.h"
 #include "Package/PackageManager.h"
 #include "Engine.h"
+#include "Math/coords.h"
 
 bool UActor::HasAnim(const NameString& sequence)
 {
@@ -419,6 +420,7 @@ void UActor::TickAnimation(float elapsed)
 	if (engine->LaunchInfo.IsBrotherBear())
 	{
 		TickAnimationKW(elapsed);
+		TickRootMotionKW();
 		return;
 	}
 
@@ -955,6 +957,42 @@ bool UActor::PlayAnimKW(const NameString& sequence, bool loop, float rate, float
 		TweenAlpha() = 1.0f;
 	}
 	return true;
+}
+
+// KnowWonder's root motion. While an animation plays with the root bone 'Move' (bAnimMove), such as Koda and Kenai
+// climbing onto a ledge, the actor moves by however far the animation's root bone moved since the last tick, counted
+// from the animation's first key. The move collides and slides once along what it hits. The root bone itself is drawn
+// at its reference position meanwhile (see USkeletalMesh::ApplyAnim), so the mesh doesn't move twice.
+void UActor::TickRootMotionKW()
+{
+	USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh());
+	vec3 root;
+	if (!bAnimMove() || Role() != ROLE_Authority || !mesh || !mesh->GetRootPositionKW(this, false, root))
+	{
+		RootMotionKW.Valid = false;
+		return;
+	}
+
+	if (!RootMotionKW.Valid || RootMotionKW.Sequence != AnimSequence() || AnimFrame() < RootMotionKW.Frame)
+	{
+		mesh->GetRootPositionKW(this, true, RootMotionKW.LastRoot);
+		RootMotionKW.Sequence = AnimSequence();
+		RootMotionKW.Valid = true;
+	}
+
+	vec3 delta = root - RootMotionKW.LastRoot;
+	RootMotionKW.LastRoot = root;
+	RootMotionKW.Frame = AnimFrame();
+	if (delta == vec3(0.0f))
+		return;
+
+	vec3 move = (Coords::Rotation(Rotation()).ToMatrix() * mat4::scale(DrawScale()) * mesh->meshToObject * vec4(delta, 0.0f)).xyz();
+	CollisionHit hit = TryMove(move);
+	if (hit.Fraction < 1.0f && !bDeleteMe())
+	{
+		vec3 rest = move * (1.0f - hit.Fraction);
+		TryMove(rest - hit.Normal * dot(rest, hit.Normal));
+	}
 }
 
 void UActor::TickAnimationKW(float elapsed)

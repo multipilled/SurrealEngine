@@ -50,6 +50,10 @@ public:
 	// The pose is evaluated once per frame number.
 	void GetPose(UActor* actor, int frame, Array<vec3>& outPoints, Array<vec3>& outNormals);
 
+	// Where the root bone is in the actor's current animation, at its AnimFrame or at its first key.
+	// False if the animation has no position keys for the root bone.
+	bool GetRootPositionKW(UActor* actor, bool firstKey, vec3& outPosition);
+
 	Array<ExtMeshWedge> ExtWedges;
 	Array<vec3> Points;
 	Array<RefSkeletonBone> RefSkeleton;
