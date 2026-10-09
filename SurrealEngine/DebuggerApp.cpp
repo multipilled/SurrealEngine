@@ -8,6 +8,7 @@
 #include "Commandlet/ExportCommandlet.h"
 #include "Commandlet/QuitCommandlet.h"
 #include "Commandlet/RunCommandlet.h"
+#include "Commandlet/NativeAuditCommandlet.h"
 #include "Commandlet/CompilerCommandlet.h"
 #include "Commandlet/Debug/CollisionCommandlet.h"
 #include "Commandlet/VM/BreakpointCommandlet.h"
@@ -94,6 +95,7 @@ int DebuggerApp::Main(Array<std::string> args)
 void DebuggerApp::CreateCommandlets()
 {
 	Commandlets.push_back(std::make_unique<RunCommandlet>());
+	Commandlets.push_back(std::make_unique<NativeAuditCommandlet>());
 	Commandlets.push_back(std::make_unique<CompilerCommandlet>());
 	Commandlets.push_back(std::make_unique<NativeCommandlet>());
 	Commandlets.push_back(std::make_unique<ExportCommandlet>());
@@ -124,7 +126,8 @@ void DebuggerApp::Tick()
 {
 	WritePrompt();
 
-	std::string text = ReadInput();
+	std::string text = PendingInput + ReadInput();
+	PendingInput.clear();
 	size_t pos = 0;
 	while (pos < text.size())
 	{
@@ -166,6 +169,12 @@ void DebuggerApp::Tick()
 					WriteOutput(NewLine());
 				WritePrompt();
 			}
+			else
+			{
+				// The commandlet waiting for input takes this line. Keep the rest for later prompts.
+				PendingInput = text.substr(std::min(endpos + InputNewLine().size(), text.size()));
+				return;
+			}
 		}
 		pos = std::min(endpos + InputNewLine().size(), text.size());
 	}
@@ -202,7 +211,7 @@ std::string DebuggerApp::GetInput()
 	InCommandlet = true;
 
 	WritePrompt();
-	while (cmdline.size() == 0)
+	while (cmdline.size() == 0 && !ExitRequested)
 	{
 		WaitForInput();
 		Tick();
@@ -443,10 +452,41 @@ std::string DebuggerApp::InputNewLine()
 #endif
 }
 
+#ifdef WIN32
+static bool IsConsoleHandle(HANDLE handle)
+{
+	DWORD mode = 0;
+	return GetConsoleMode(handle, &mode) != 0;
+}
+#endif
+
 void DebuggerApp::WaitForInput()
 {
+	if (!PendingInput.empty())
+		return;
+
 #ifdef WIN32
-	WaitForSingleObject(GetStdHandle(STD_INPUT_HANDLE), INFINITE);
+	HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+	if (IsConsoleHandle(input))
+	{
+		WaitForSingleObject(input, INFINITE);
+	}
+	else if (GetFileType(input) == FILE_TYPE_PIPE)
+	{
+		// Pipes can't be waited on. Poll until data arrives or the writer closes its end.
+		while (true)
+		{
+			DWORD available = 0;
+			if (!PeekNamedPipe(input, nullptr, 0, nullptr, &available, nullptr))
+			{
+				ExitRequested = true;
+				break;
+			}
+			if (available > 0)
+				break;
+			Sleep(10);
+		}
+	}
 #else
 	fd_set rfds;
 	timeval tv;
@@ -462,7 +502,37 @@ std::string DebuggerApp::ReadInput()
 {
 #ifdef WIN32
 	std::string text;
-	while (WaitForSingleObject(GetStdHandle(STD_INPUT_HANDLE), 0) == WAIT_OBJECT_0)
+	HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+	if (!IsConsoleHandle(input))
+	{
+		// Redirected input: read whatever has arrived. Lines end with \n or \r\n, while console input ends them with \r.
+		bool isPipe = GetFileType(input) == FILE_TYPE_PIPE;
+		while (true)
+		{
+			char buffer[1024];
+			DWORD available = sizeof(buffer);
+			if (isPipe && (!PeekNamedPipe(input, nullptr, 0, nullptr, &available, nullptr) || available == 0))
+				break;
+
+			DWORD bytesread = 0;
+			if (!ReadFile(input, buffer, std::min(available, (DWORD)sizeof(buffer)), &bytesread, nullptr) || bytesread == 0)
+			{
+				ExitRequested = true;
+				break;
+			}
+
+			for (DWORD i = 0; i < bytesread; i++)
+			{
+				if (buffer[i] == '\n')
+					text.push_back('\r');
+				else if (buffer[i] != '\r')
+					text.push_back(buffer[i]);
+			}
+		}
+		return text;
+	}
+
+	while (WaitForSingleObject(input, 0) == WAIT_OBJECT_0)
 	{
 		// We have to do it in this incredibly stupid way because if we just use ReadFile or ReadConsole then the input handle remains signaled!
 
@@ -531,12 +601,26 @@ void DebuggerApp::WriteOutput(const std::string& text)
 	}
 
 #ifdef WIN32
+	HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+	if (!IsConsoleHandle(output))
+	{
+		size_t pos = 0;
+		while (pos < WriteBuffer.size())
+		{
+			DWORD written = 0;
+			if (!WriteFile(output, WriteBuffer.data() + pos, (DWORD)(WriteBuffer.size() - pos), &written, nullptr) || written == 0)
+				break;
+			pos += written;
+		}
+		return;
+	}
+
 	std::wstring text16 = to_utf16(WriteBuffer);
 	size_t pos = 0;
 	while (pos < text16.size())
 	{
 		DWORD written = 0;
-		if (!WriteConsole(GetStdHandle(STD_OUTPUT_HANDLE), text16.data() + pos, (DWORD)(text16.size() - pos), &written, nullptr))
+		if (!WriteConsole(output, text16.data() + pos, (DWORD)(text16.size() - pos), &written, nullptr))
 			break;
 		pos += written;
 	}

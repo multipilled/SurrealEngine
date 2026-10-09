@@ -18,7 +18,10 @@ void NCanvas::RegisterFunctions()
 {
 	RegisterVMNativeFunc_7("Canvas", "DrawClippedActor", &NCanvas::DrawClippedActor, 471);
 	RegisterVMNativeFunc_9("Canvas", "DrawPortal", &NCanvas::DrawPortal, 480);
-	RegisterVMNativeFunc_2("Canvas", "DrawText", &NCanvas::DrawText, 465);
+	if (engine->LaunchInfo.IsBrotherBear())
+		RegisterVMNativeFunc_4("Canvas", "DrawText", &NCanvas::DrawText_BB, 465);
+	else
+		RegisterVMNativeFunc_2("Canvas", "DrawText", &NCanvas::DrawText, 465);
 	RegisterVMNativeFunc_2("Canvas", "DrawTextClipped", &NCanvas::DrawTextClipped, 469);
 	RegisterVMNativeFunc_7("Canvas", "DrawTile", &NCanvas::DrawTile, 466);
 	RegisterVMNativeFunc_7("Canvas", "DrawTileClipped", &NCanvas::DrawTileClipped, 468);
@@ -117,6 +120,26 @@ void NCanvas::DrawText(UObject* Self, const std::string& Text, std::optional<boo
 			curY += curYL;
 			curYL = 0;
 		}
+	}
+}
+
+void NCanvas::DrawText_BB(UObject* Self, const std::string& Text, std::optional<bool> CR, std::optional<int> numChars, std::optional<bool> bCursor)
+{
+	// Brother Bear's DrawText can limit the output to the first numChars characters (zero or omitted draws everything)
+	// and can append a text cursor. No script in the game uses the extra parameters, so the cursor glyph is a guess
+	// based on the one the console draws for its typing prompt.
+	if ((numChars && *numChars > 0 && (size_t)*numChars < Text.size()) || (bCursor && *bCursor))
+	{
+		std::string text = Text;
+		if (numChars && *numChars > 0 && (size_t)*numChars < text.size())
+			text.resize((size_t)*numChars);
+		if (bCursor && *bCursor)
+			text.push_back('_');
+		DrawText(Self, text, CR);
+	}
+	else
+	{
+		DrawText(Self, Text, CR);
 	}
 }
 

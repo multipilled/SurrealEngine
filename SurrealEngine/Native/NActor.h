@@ -114,4 +114,22 @@ public:
 	static void LoadGameSaveInfo(UObject* Self, const std::string& dir, UObject* object, BitfieldBool& ReturnValue);
 	static void IsOSVer2kOrXP(UObject* Self, BitfieldBool& ReturnValue);
 	static void StopSound_HP(UObject* Self, std::optional<UObject*> Sound, std::optional<uint8_t> Slot);
+
+	// Brother Bear
+	static void PlaySound_BB(UObject* Self, UObject* Sound, std::optional<uint8_t> Slot, std::optional<float> Volume, std::optional<bool> bNoOverride, std::optional<float> Radius, std::optional<float> Pitch, std::optional<bool> Disable3D, std::optional<bool> Loop, std::optional<float> PitchVariance, std::optional<float> RollOff);
+	static void PlayOwnedSound_BB(UObject* Self, UObject* Sound, std::optional<uint8_t> Slot, std::optional<float> Volume, std::optional<bool> bNoOverride, std::optional<float> Radius, std::optional<float> Pitch, std::optional<bool> Disable3D, std::optional<bool> Loop, std::optional<float> PitchVariance, std::optional<float> RollOff);
+	static void DemoPlaySound_BB(UObject* Self, UObject* Sound, std::optional<uint8_t> Slot, std::optional<float> Volume, std::optional<bool> bNoOverride, std::optional<float> Radius, std::optional<float> Pitch, std::optional<bool> Disable3D, std::optional<bool> Loop, std::optional<float> PitchVariance, std::optional<float> RollOff);
+	static void ModifySound_BB(UObject* Self, uint8_t parameter, float Value, std::optional<UObject*> Sound, std::optional<uint8_t> Slot, BitfieldBool& ReturnValue);
+	static void StopSound_BB(UObject* Self, std::optional<UObject*> Sound, std::optional<uint8_t> Slot, std::optional<float> FadeOutTime);
+	static void SetCollisionSize_BB(UObject* Self, float NewRadius, float NewHeight, std::optional<float> NewWidth, BitfieldBool& ReturnValue);
+	static void CreateAnimChannel_BB(UObject* Self, UObject* NewClass, uint8_t Type, const NameString& RootBone, std::optional<bool> bTransient, std::optional<bool> bNotReplaceable, UObject*& ReturnValue);
+	static void BoneRot_BB(UObject* Self, const NameString& Bone, Rotator& ReturnValue);
+	static void IsSoftwareRendering_BB(UObject* Self, BitfieldBool& ReturnValue);
+	static void GetCurrentKeyState_BB(UObject* Self, uint8_t Key, BitfieldBool& ReturnValue);
+	static void SaveGameExists_BB(UObject* Self, BitfieldBool& ReturnValue);
+	static void TraceTexture_BB(UObject* Self, const vec3& TraceEnd, const vec3& TraceStart, int& Flags, std::optional<bool> bTraceDecals, UObject*& ReturnValue);
+	static void TraceWaterSurface_BB(UObject* Self, vec3& WaterSurf, const vec3& StartTrace, const vec3& EndTrace, vec3& ReturnValue);
+	static void PlayMusic_BB(UObject* Self, const std::string& Song, float FadeInTime, std::optional<bool> bLoopMusic, int& ReturnValue);
+	static void StopMusic_BB(UObject* Self, int SongHandle, float FadeOutTime);
+	static void StopAllMusic_BB(UObject* Self, float FadeOutTime);
 };

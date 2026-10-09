@@ -19,6 +19,7 @@ public:
 	static void IsPressing_U227(UObject* Self, uint8_t& KeyNum, BitfieldBool& ReturnValue);
 	static void PasteFromClipboard(UObject* Self, std::string& ReturnValue);
 	static void ResetKeyboard(UObject* Self);
+	static void ScreenToWorld(UObject* Self, const vec3& S, vec3& ReturnValue);
 	static void UpdateURL(UObject* Self, const std::string& NewOption, const std::string& NewValue, bool bSaveDefault);
 	static void UpdateURL_219(UObject* Self, const std::string& NewOption);
 };

@@ -4,6 +4,7 @@
 #include "Packages/Core/UClass.h"
 #include "Packages/Engine/UViewport.h"
 #include "Packages/Engine/Actors/USpawnNotify.h"
+#include "Packages/Engine/Actors/EmitterBB.h"
 #include "Packages/Engine/Actors/Info/ULevelInfo.h"
 #include "Packages/Engine/Actors/Info/UGameInfo.h"
 #include "Packages/Engine/Actors/Pawn/UPlayerPawn.h"
@@ -126,6 +127,24 @@ bool UActor::Destroy()
 	SetBase(nullptr, true);
 
 	engine->audiodev->ActorDestroyed(this);
+	if (engine->LaunchInfo.IsBrotherBear())
+	{
+		EmitterBB::Remove(this);
+
+		// An anim channel leaves its owner's AuxAnims
+		if (AnimBone() != 0 && Owner())
+		{
+			auto channels = Owner()->AuxAnims();
+			for (size_t i = 0; i < channels.size(); i++)
+			{
+				if (channels[i] == this)
+				{
+					channels.Array->Remove(i, 1);
+					break;
+				}
+			}
+		}
+	}
 
 	ULevel* level = XLevel();
 
@@ -203,6 +222,9 @@ void UActor::Tick(float elapsed)
 	}
 
 	TickPhysics(elapsed);
+
+	if (engine->LaunchInfo.IsBrotherBear() && DrawType() == DT_Emitter_BB && !bDeleteMe())
+		EmitterBB::Tick(this, elapsed);
 
 	if (TimerRate() > 0.0f) // Role() == ROLE_Authority && RemoteRole() == ROLE_AutonomousProxy
 	{

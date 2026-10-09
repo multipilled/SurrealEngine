@@ -1,6 +1,8 @@
 
 #include "Precomp.h"
 #include "UActor.h"
+#include "EmitterBB.h"
+#include "Engine.h"
 #include "Packages/Engine/Actors/Brush/UMover.h"
 #include "Packages/Engine/Resources/Level/ULevel.h"
 #include "Packages/Engine/Resources/Level/UModel.h"
@@ -29,6 +31,14 @@ void UActor::UpdateBspInfo()
 		vec3 extents = vec3(std::max(texWidth, texHeight) * 0.5f * DrawScale());
 		bbox.min = location - extents;
 		bbox.max = location + extents;
+	}
+	else if (dt == (EDrawType)DT_Emitter_BB && engine->LaunchInfo.IsBrotherBear())
+	{
+		// Rounded out to 64 units so that the actor doesn't move between BSP nodes every frame
+		if (!EmitterBB::GetBounds(this, bbox))
+			bbox = BBox(Location() - 16.0f, Location() + 16.0f);
+		bbox.min = vec3(std::floor(bbox.min.x / 64.0f), std::floor(bbox.min.y / 64.0f), std::floor(bbox.min.z / 64.0f)) * 64.0f;
+		bbox.max = vec3(std::ceil(bbox.max.x / 64.0f), std::ceil(bbox.max.y / 64.0f), std::ceil(bbox.max.z / 64.0f)) * 64.0f;
 	}
 	else if (dt == DT_Brush && Brush())
 	{

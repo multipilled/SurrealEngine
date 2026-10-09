@@ -482,7 +482,7 @@ ExpressionEvalResult Frame::Run()
 		Break();
 	}
 
-	const int maxInstructions = 500'000;
+	const int maxInstructions = 10'000'000;
 	int instructionsRetired = 0;
 	while (true)
 	{
@@ -621,6 +621,18 @@ ExpressionEvalResult Frame::Run()
 	}
 }
 
+// Like UE1's FString comparison, string cases match regardless of case
+static bool SwitchCaseMatches(const ExpressionValue& condition, const ExpressionValue& casevalue)
+{
+	if (condition.GetType() == ExpressionValueType::ValueString && casevalue.GetType() == ExpressionValueType::ValueString)
+	{
+		const std::string& a = condition.ToString();
+		const std::string& b = casevalue.ToString();
+		return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) { return std::tolower((unsigned char)x) == std::tolower((unsigned char)y); });
+	}
+	return condition.IsEqual(casevalue);
+}
+
 void Frame::ProcessSwitch(const ExpressionValue& condition)
 {
 	SwitchExpression* switchexpr = static_cast<SwitchExpression*>(Func->Code->Statements[StatementIndex - 1]);
@@ -631,7 +643,7 @@ void Frame::ProcessSwitch(const ExpressionValue& condition)
 		{
 			//ExpressionValue casevalue = ExpressionEvaluator::Eval(caseexpr->Value, Object, Object, Variables->Data).Value;
 			ExpressionValue casevalue = RunExpr(caseexpr->Value, Object, Object, Variables->Data).Value;
-			if (condition.IsEqual(casevalue))
+			if (SwitchCaseMatches(condition, casevalue))
 				break;
 			else
 				StatementIndex = Func->Code->FindStatementIndex(caseexpr->NextOffset);

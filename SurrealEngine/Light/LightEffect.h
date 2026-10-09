@@ -35,9 +35,10 @@ private:
 	void SpotlightEffect(LightEffectArgs* args);
 	void SearchlightEffect(LightEffectArgs* args);
 	void OmniBumpMapEffect(LightEffectArgs* args);
+	void SunlightEffect(LightEffectArgs* args);
 
 	typedef void (LightEffect::* EffectFunc)(LightEffectArgs* args);
-	static EffectFunc Effects[LE_Unused + 1];
+	static EffectFunc Effects[LE_Sunlight + 1];
 
 	enum { SinTableSize = 1024, FalloffTableSize = 1024 };
 

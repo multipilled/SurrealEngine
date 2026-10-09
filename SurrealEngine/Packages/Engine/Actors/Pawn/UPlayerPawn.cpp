@@ -53,6 +53,13 @@ void UPlayerPawn::TickRotating(float elapsed)
 	if (Physics() == PHYS_Spider)
 		return;
 
+	// Brother Bear's companion (Koda) is a player pawn that AI and cutscenes drive, and it turns like other pawns
+	if (engine->LaunchInfo.IsBrotherBear() && !Player())
+	{
+		UPawn::TickRotating(elapsed);
+		return;
+	}
+
 	Rotator rot = Rotation();
 
 	// To do: apply RotationRate().Roll

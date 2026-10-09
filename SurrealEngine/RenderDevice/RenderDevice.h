@@ -37,6 +37,7 @@ struct GouraudVertex
 	vec3 Light;
 	vec2 UV;
 	vec4 Fog;
+	float Alpha = 1.0f;
 };
 
 struct SurfaceFacet
@@ -190,4 +191,5 @@ protected:
 private:
 	RenderDevice* device = nullptr;
 	SceneNode frame;
+	bool locked = false;
 };

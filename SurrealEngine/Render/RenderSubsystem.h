@@ -85,6 +85,9 @@ public:
 
 	VisibleFrame MainFrame;
 
+	// Left edge of the 2D canvas in the viewport (non-zero when it is pillarboxed to 4:3)
+	int GetCanvasLeft() const { return Canvas.Frame.XB; }
+
 private:
 	void DrawScene();
 

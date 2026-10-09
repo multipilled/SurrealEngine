@@ -54,6 +54,8 @@ GameLaunchInfo GameFolderSelection::GetLaunchInfo(int selectedGame)
 	info.gameName = commandline->GetArg("-g", "--game", info.gameName);
 	info.noEntryMap = commandline->HasArg("-n", "--noentrymap") || info.noEntryMap;
 	info.url = commandline->GetArg("-u", "--url", info.url);
+	info.saveSlot = commandline->GetArgInt("", "--saveslot", info.saveSlot);
+	info.loadGame = commandline->GetArgInt("", "--loadgame", info.loadGame);
 	return info;
 }
 
@@ -380,6 +382,15 @@ GameLaunchInfo GameFolderSelection::ExamineFolder(const std::string& path)
 			case KnownUE1Games::HARRYPOTTER2_433:
 			{
 				info.gameName = "Harry Potter and the Chamber of Secrets (HP2)";
+				info.ue1Version = 500;
+				info.gameVersion = 433;
+				info.gameSubVersion = 0;
+				info.gameVersionString = "433";
+			}
+			break;
+			case KnownUE1Games::BROTHERBEAR:
+			{
+				info.gameName = "Disney's Brother Bear";
 				info.ue1Version = 500;
 				info.gameVersion = 433;
 				info.gameSubVersion = 0;

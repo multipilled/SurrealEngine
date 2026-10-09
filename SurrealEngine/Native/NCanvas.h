@@ -14,6 +14,7 @@ public:
 	static void DrawClippedActor(UObject* Self, UObject* A, bool WireFrame, int X, int Y, int XB, int YB, std::optional<bool> ClearZ);
 	static void DrawPortal(UObject* Self, int X, int Y, int Width, int Height, UObject* CamActor, const vec3& CamLocation, const Rotator& CamRotation, std::optional<int> FOV, std::optional<bool> ClearZ);
 	static void DrawText(UObject* Self, const std::string& Text, std::optional<bool> CR);
+	static void DrawText_BB(UObject* Self, const std::string& Text, std::optional<bool> CR, std::optional<int> numChars, std::optional<bool> bCursor);
 	static void DrawTextClipped(UObject* Self, const std::string& Text, std::optional<bool> bCheckHotKey);
 	static void DrawTile(UObject* Self, UObject* Tex, float XL, float YL, float U, float V, float UL, float VL);
 	static void DrawTileClipped(UObject* Self, UObject* Tex, float XL, float YL, float U, float V, float UL, float VL);

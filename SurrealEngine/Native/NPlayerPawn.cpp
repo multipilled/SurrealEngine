@@ -5,6 +5,8 @@
 #include "Packages/Engine/Resources/Level/ULevel.h"
 #include "Packages/Engine/Actors/Pawn/UPlayerPawn.h"
 #include "Packages/Engine/Actors/Info/ULevelInfo.h"
+#include "Packages/Engine/UViewport.h"
+#include "Math/coords.h"
 #include "Engine.h"
 #include "Package/PackageManager.h"
 #include "VM/ScriptCall.h"
@@ -34,6 +36,8 @@ void NPlayerPawn::RegisterFunctions()
 		RegisterVMNativeFunc_1("PlayerPawn", "UpdateURL", &NPlayerPawn::UpdateURL_219, 546);
 	if (engine->LaunchInfo.IsUnreal1_227())
 		RegisterVMNativeFunc_2("PlayerPawn", "IsPressing", &NPlayerPawn::IsPressing_U227, 549);
+	if (engine->LaunchInfo.IsBrotherBear())
+		RegisterVMNativeFunc_2("PlayerPawn", "ScreenToWorld", &NPlayerPawn::ScreenToWorld, 542);
 }
 
 void NPlayerPawn::ClientTravel(UObject* Self, const std::string& URL, uint8_t TravelType, bool bItems)
@@ -101,6 +105,41 @@ void NPlayerPawn::PasteFromClipboard(UObject* Self, std::string& ReturnValue)
 void NPlayerPawn::ResetKeyboard(UObject* Self)
 {
 	LogUnimplemented("PlayerPawn.ResetKeyboard");
+}
+
+void NPlayerPawn::ScreenToWorld(UObject* Self, const vec3& S, vec3& ReturnValue)
+{
+	// Unprojects a normalized view position: x runs left to right and y top to bottom, both in [-1, 1].
+	// z is the depth along the view direction, in world units, at which the resulting world point lies.
+	UPlayerPawn* player = UObject::Cast<UPlayerPawn>(Self);
+
+	vec3 camLocation;
+	Rotator camRotation;
+	float fovAngle;
+	if (engine->viewport && engine->viewport->Actor() == player)
+	{
+		// The engine already ran PlayerCalcView for the view this frame
+		camLocation = engine->CameraLocation;
+		camRotation = engine->CameraRotation;
+		fovAngle = engine->CameraFovAngle;
+	}
+	else
+	{
+		camLocation = player->Location();
+		camLocation.z += player->EyeHeight();
+		camRotation = player->ViewRotation();
+		fovAngle = player->FovAngle();
+	}
+
+	float aspect = 0.75f;
+	if (engine->viewport && engine->viewport->ViewportWidth() > 0 && engine->viewport->ViewportHeight() > 0)
+		aspect = engine->viewport->ViewportHeight() / (float)engine->viewport->ViewportWidth();
+
+	float unproject = S.z * std::tan(radians(fovAngle) * 0.5f);
+
+	vec3 xaxis, yaxis, zaxis;
+	Coords::Rotation(camRotation).GetAxes(xaxis, yaxis, zaxis);
+	ReturnValue = camLocation + xaxis * S.z + yaxis * (S.x * unproject) - zaxis * (S.y * unproject * aspect);
 }
 
 void NPlayerPawn::UpdateURL(UObject* Self, const std::string& NewOption, const std::string& NewValue, bool bSaveDefault)

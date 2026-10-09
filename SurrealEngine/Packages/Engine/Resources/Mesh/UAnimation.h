@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Packages/Core/UObject.h"
+#include "Packages/Engine/Resources/Mesh/UMesh.h"
 #include "Math/quaternion.h"
 
 struct RefBone
@@ -39,4 +40,8 @@ public:
 
 	Array<RefBone> RefBones;
 	Array<AnimMove> Moves;
+	Array<MeshAnimSeq> AnimSeqs; // Only loaded for Brother Bear. Moves[i] holds the keys for AnimSeqs[i].
+
+private:
+	void LoadKnowWonder(ObjectStream* stream);
 };

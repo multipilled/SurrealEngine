@@ -49,6 +49,7 @@ void LightSystem::BeginFrame()
 	FrameCounter++;
 
 	LightTree.Lights.clear();
+	Sunlights.clear();
 	for (UActor* actor : engine->Level->Actors)
 	{
 		if (!actor)
@@ -115,6 +116,13 @@ void LightSystem::BeginFrame()
 		if (needsUpdate)
 			actor->Light.LastUpdate = FrameCounter;
 
+		// Sunlight reaches everything, so it doesn't go in the light tree with the point lights
+		if (lightEffect == LE_Sunlight)
+		{
+			Sunlights.push_back(actor);
+			continue;
+		}
+
 		LightTree.Lights.push_back(actor);
 	}
 	LightTree.CreateTLAS();
@@ -133,6 +141,13 @@ void LightSystem::UpdateLightList(UActor* actor)
 
 	if (actor->bUnlit())
 		return;
+
+	// Sunlight goes first so it isn't dropped when an actor touches many lights. To do: shadows from sunlight
+	for (UActor* light : Sunlights)
+	{
+		if (light->bSpecialLit() == actor->bSpecialLit())
+			actor->TouchingLights.List.push_back(light);
+	}
 
 	vec3 extents = actor->BspInfo.BoundingBox.extents();
 

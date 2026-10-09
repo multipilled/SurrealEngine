@@ -97,7 +97,10 @@ void NObject::RegisterFunctions()
 	RegisterVMNativeFunc_3("Object", "GreaterGreater_VectorRotator", &NObject::GreaterGreater_VectorRotator, 276);
 	RegisterVMNativeFunc_3("Object", "Greater_FloatFloat", &NObject::Greater_FloatFloat, 177);
 	RegisterVMNativeFunc_3("Object", "Greater_IntInt", &NObject::Greater_IntInt, 151);
-	RegisterVMNativeFunc_3("Object", "Greater_StrStr", &NObject::Greater_StrStr, 1186);
+	if (engine->LaunchInfo.IsBrotherBear())
+		RegisterVMNativeFunc_3("Object", "Greater_StrStr", &NObject::Greater_StrStr, 116);
+	else
+		RegisterVMNativeFunc_3("Object", "Greater_StrStr", &NObject::Greater_StrStr, 1186);
 	if (engine->LaunchInfo.IsUnreal1_227())
 		RegisterVMNativeFunc_4("Object", "InStr", &NObject::InStr_U227, 126);
 	else
@@ -303,9 +306,21 @@ void NObject::RegisterFunctions()
 		RegisterVMNativeFunc_3("Object", "At_StrStr", &NObject::At_StrStr, 168);
 	}
 
-	if (engine->LaunchInfo.IsHarryPotter1())
+	if (engine->LaunchInfo.IsHarryPotter1() || engine->LaunchInfo.IsBrotherBear())
 	{
 		RegisterVMNativeFunc_1("Object", "GetLanguage", &NObject::GetLanguage, 0);
+	}
+
+	if (engine->LaunchInfo.IsBrotherBear())
+	{
+		RegisterVMNativeFunc_2("Object", "SinTab", &NObject::SinTab_BB, 197);
+		RegisterVMNativeFunc_2("Object", "CosTab", &NObject::CosTab_BB, 198);
+		RegisterVMNativeFunc_2("Object", "SinFloat", &NObject::SinFloat_BB, 199);
+		RegisterVMNativeFunc_2("Object", "CosFloat", &NObject::CosFloat_BB, 200);
+		RegisterVMNativeFunc_3("Object", "LoadStringArray", &NObject::LoadStringArray_BB, 0);
+		RegisterVMNativeFunc_3("Object", "SaveStringArray", &NObject::SaveStringArray_BB, 0);
+		RegisterVMNativeFunc_2("Object", "TArrayCount", &NObject::TArrayCount_BB, 0);
+		RegisterVMNativeFunc_2("Object", "DynArrayLength", &NObject::DynArrayLength_BB, 0);
 	}
 
 	if (engine->LaunchInfo.IsUnrealTournament_469())
@@ -665,6 +680,20 @@ void NObject::Dot_QuatQuat_U227(quaternion& A, quaternion& B, float& ReturnValue
 	ReturnValue = dot(vec3{A.x, A.y, A.z}, vec3{B.x, B.y, B.z});
 }
 
+// Object names may include a group path, as in "Package.Group.Object"
+static UObject* FindDynamicObject(const std::string& packageName, const std::string& objectName, UObject* objectClass)
+{
+	Package* package = engine->packages->GetPackage(packageName);
+	auto grouppos = objectName.find_last_of('.');
+	if (grouppos == std::string::npos)
+		return package->GetUObject(objectClass->Name, objectName);
+
+	UObject* obj = package->GetUObject(objectClass->Name, objectName.substr(grouppos + 1), objectName.substr(0, grouppos), false);
+	if (!obj) // fall back to ignoring the group
+		obj = package->GetUObject(objectClass->Name, objectName.substr(grouppos + 1));
+	return obj;
+}
+
 void NObject::DynamicLoadObject(const std::string& ObjectName, UObject* ObjectClass, std::optional<bool> MayFail, UObject*& ReturnValue)
 {
 	ReturnValue = nullptr;
@@ -679,7 +708,7 @@ void NObject::DynamicLoadObject(const std::string& ObjectName, UObject* ObjectCl
 
 			try
 			{
-				ReturnValue = engine->packages->GetPackage(packageName)->GetUObject(ObjectClass->Name, objectName);
+				ReturnValue = FindDynamicObject(packageName, objectName, ObjectClass);
 			}
 			catch (...)
 			{
@@ -707,7 +736,7 @@ void NObject::DynamicLoadObject_219(const std::string& ObjectName, UObject* Obje
 
 			try
 			{
-				ReturnValue = engine->packages->GetPackage(packageName)->GetUObject(ObjectClass->Name, objectName);
+				ReturnValue = FindDynamicObject(packageName, objectName, ObjectClass);
 			}
 			catch (...)
 			{
@@ -1684,6 +1713,74 @@ void NObject::AllObjects_DeusEx(UObject* Self, UObject* BaseClass, UObject*& Act
 void NObject::GetLanguage(std::string& ReturnValue)
 {
 	ReturnValue = "en"; // Is this correct?
+}
+
+// Brother Bear's cheap trig helpers read from a 16384 entry sine table. SinTab/CosTab take
+// angles in Unreal rotation units (65536 per full turn); SinFloat/CosFloat take radians.
+static float BrotherBearTrigTable(int angle)
+{
+	constexpr int tableSize = 16384;
+	static const std::vector<float> table = []()
+	{
+		std::vector<float> t(tableSize);
+		for (int i = 0; i < tableSize; i++)
+			t[i] = (float)std::sin(i * (2.0 * 3.14159265358979323846) / tableSize);
+		return t;
+	}();
+	return table[(angle >> 2) & (tableSize - 1)];
+}
+
+static int BrotherBearRadiansToAngle(float radians)
+{
+	double angle = radians * (65536.0 / (2.0 * 3.14159265358979323846));
+	if (!std::isfinite(angle))
+		return 0;
+	// Only the angle modulo a full turn matters for the table lookup
+	return (int)std::fmod(angle, 65536.0);
+}
+
+void NObject::SinTab_BB(int A, float& ReturnValue)
+{
+	ReturnValue = BrotherBearTrigTable(A);
+}
+
+void NObject::CosTab_BB(int A, float& ReturnValue)
+{
+	ReturnValue = BrotherBearTrigTable((int)((uint32_t)A + 16384u));
+}
+
+void NObject::SinFloat_BB(float A, float& ReturnValue)
+{
+	SinTab_BB(BrotherBearRadiansToAngle(A), ReturnValue);
+}
+
+void NObject::CosFloat_BB(float A, float& ReturnValue)
+{
+	CosTab_BB(BrotherBearRadiansToAngle(A), ReturnValue);
+}
+
+void NObject::LoadStringArray_BB(ScriptArray* StringArray, const std::string& Filename, std::string& ReturnValue)
+{
+	// No script in the game calls this, so the meaning of the returned string is unknown.
+	LogUnimplemented("Object.LoadStringArray(" + Filename + ")");
+	ReturnValue = {};
+}
+
+void NObject::SaveStringArray_BB(ScriptArray* StringArray, const std::string& Filename, std::string& ReturnValue)
+{
+	// No script in the game calls this, so the meaning of the returned string is unknown.
+	LogUnimplemented("Object.SaveStringArray(" + Filename + ")");
+	ReturnValue = {};
+}
+
+void NObject::TArrayCount_BB(ScriptArray* StringArray, int& ReturnValue)
+{
+	ReturnValue = StringArray ? (int)StringArray->GetSize() : 0;
+}
+
+void NObject::DynArrayLength_BB(ScriptArray* DynArray, int& ReturnValue)
+{
+	ReturnValue = DynArray ? (int)DynArray->GetSize() : 0;
 }
 
 void NObject::GetConfigString_Nerf(const std::string& section, const std::string& key, const std::string& iniName, std::string& ReturnValue)

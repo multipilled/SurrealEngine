@@ -41,6 +41,7 @@ enum class KnownUE1Games
 	WHEELOFTIME_333,
 	HARRYPOTTER1_433,
 	HARRYPOTTER2_433,
+	BROTHERBEAR,
 };
 
 static const std::map<std::string, KnownUE1Games> SHA1Database = {
@@ -202,6 +203,9 @@ static const std::map<std::string, KnownUE1Games> SHA1Database = {
 
 	// Harry Potter 2 (UK), archive.org cracked exe
 	{"28b0e54af165c1ad170d5132e4ac7ca986d06484", KnownUE1Games::HARRYPOTTER2_433},
+
+	// Disney's Brother Bear (US English retail CD)
+	{"e77df020e7c1c299bd88f229564cfac4476d4eda", KnownUE1Games::BROTHERBEAR},
 };
 
 // Note: order matters here as we pick the first match.

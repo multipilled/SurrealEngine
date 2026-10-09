@@ -57,6 +57,11 @@ public:
 		pos += bytes;
 	}
 
+	uint32_t BytesLeft() const
+	{
+		return (uint32_t)(size - pos);
+	}
+
 	uint32_t Tell()
 	{
 		return (uint32_t)(startoffset + pos);

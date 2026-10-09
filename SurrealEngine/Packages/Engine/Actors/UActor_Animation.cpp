@@ -5,7 +5,11 @@
 #include "VM/ScriptCall.h"
 #include "VM/Frame.h"
 #include "Packages/Engine/Resources/Mesh/USkeletalMesh.h"
+#include "Packages/Engine/Resources/Mesh/UAnimation.h"
+#include "Package/PackageManager.h"
 #include "Engine.h"
+#include "Math/coords.h"
+#include "Render/RenderSubsystem.h"
 
 bool UActor::HasAnim(const NameString& sequence)
 {
@@ -14,12 +18,35 @@ bool UActor::HasAnim(const NameString& sequence)
 
 bool UActor::IsAnimating()
 {
+	// KnowWonder also counts a tween as animating
+	if (engine->LaunchInfo.IsBrotherBear())
+		return !AnimSequence().IsNone() && (AnimRate() != 0.0f || TweenRate() != 0.0f);
 	return AnimRate() != 0.0f;
+}
+
+static bool IsMainChannel(const std::optional<NameString>& RootBone)
+{
+	return !RootBone.has_value() || RootBone->IsNone();
+}
+
+// KnowWonder's skeletons list each bone's descendants right after it, so a bone and its children span NumChildren bones
+static bool IsInBoneRangeKW(USkeletalMesh* mesh, int bone, int rootBone)
+{
+	return rootBone >= 0 && (size_t)rootBone < mesh->RefSkeleton.size() && bone >= rootBone && bone < rootBone + (int)mesh->RefSkeleton[rootBone].NumChildren;
 }
 
 bool UActor::IsAnimating_HP(std::optional<NameString> RootBone)
 {
-	LogUnimplemented("Actor.IsAnimating_HP");
+	if (!IsMainChannel(RootBone))
+	{
+		if (engine->LaunchInfo.IsBrotherBear())
+		{
+			UActor* channel = FindAnimChannelKW(*RootBone);
+			return channel && channel->IsAnimating();
+		}
+		LogUnimplemented("Actor.IsAnimating with a root bone");
+		return false;
+	}
 	return IsAnimating();
 }
 
@@ -37,7 +64,33 @@ void UActor::FinishAnim()
 
 void UActor::FinishAnim_HP(std::optional<NameString> RootBone)
 {
-	LogUnimplemented("Actor.FinishAnim_HP");
+	if (engine->LaunchInfo.IsBrotherBear())
+	{
+		UActor* target = this;
+		if (!IsMainChannel(RootBone))
+		{
+			target = FindAnimChannelKW(*RootBone);
+			if (!target)
+				return;
+		}
+
+		if (target->bAnimLoop())
+		{
+			target->bAnimLoop() = false;
+			target->bAnimFinished() = false;
+		}
+
+		// KnowWonder puts the latent wait on the channel's own state, so FinishAnim with a root bone doesn't wait for the caller
+		if (target == this && !AnimSequence().IsNone() && IsAnimating() && AnimFrame() < AnimLast() && StateFrame)
+			StateFrame->LatentState = LatentRunState::FinishAnim;
+		return;
+	}
+
+	if (!IsMainChannel(RootBone))
+	{
+		LogUnimplemented("Actor.FinishAnim with a root bone");
+		return;
+	}
 	FinishAnim();
 }
 
@@ -68,6 +121,13 @@ NameString UActor::GetAnimGroup(const NameString& sequence)
 // bAnimNotify   - true if animation notify events should be fired when animating
 // bAnimFinished - true if AnimLast was reached and there's no looping
 
+// Brother Bear's Actor class has no OldAnimRate
+static void SetOldAnimRate(UActor* actor, float rate)
+{
+	if (PropOffsets_Actor.OldAnimRate.DataOffset != ~(size_t)0)
+		actor->OldAnimRate() = rate;
+}
+
 void UActor::PlayAnim(const NameString& sequence, float rate, float tweenTime)
 {
 	if (Mesh())
@@ -86,7 +146,7 @@ void UActor::PlayAnim(const NameString& sequence, float rate, float tweenTime)
 				AnimRate() = rate * seq->Rate / seq->NumFrames;
 				TweenRate() = tweenTime > 0.0f ? 1.0f / (tweenTime * seq->NumFrames) : 0.0f;
 				bAnimNotify() = !seq->Notifys.empty();
-				OldAnimRate() = AnimRate();
+				SetOldAnimRate(this, AnimRate());
 			}
 			else
 			{
@@ -97,7 +157,7 @@ void UActor::PlayAnim(const NameString& sequence, float rate, float tweenTime)
 				AnimRate() = 0.0f;
 				TweenRate() = tweenTime > 0.0f ? 1.0f / tweenTime : 10.0f;
 				bAnimNotify() = false;
-				OldAnimRate() = 0.0f;
+				SetOldAnimRate(this, 0.0f);
 				AnimMinRate() = 0.0f;
 			}
 
@@ -257,7 +317,7 @@ void UActor::LoopAnim(const NameString& sequence, float rate, float tweenTime, f
 					AnimRate() = rate * seq->Rate / seq->NumFrames;
 					AnimMinRate() = minRate * seq->Rate / seq->NumFrames;
 					TweenRate() = tweenTime > 0.0f ? 1.0f / (tweenTime * seq->NumFrames) : 0.0f;
-					OldAnimRate() = AnimRate();
+					SetOldAnimRate(this, AnimRate());
 				}
 			}
 			else
@@ -273,7 +333,7 @@ void UActor::LoopAnim(const NameString& sequence, float rate, float tweenTime, f
 					AnimRate() = rate * seq->Rate / seq->NumFrames;
 					AnimMinRate() = minRate * seq->Rate / seq->NumFrames;
 					TweenRate() = tweenTime > 0.0f ? 1.0f / (tweenTime * seq->NumFrames) : 0.0f;
-					OldAnimRate() = AnimRate();
+					SetOldAnimRate(this, AnimRate());
 				}
 				else
 				{
@@ -284,7 +344,7 @@ void UActor::LoopAnim(const NameString& sequence, float rate, float tweenTime, f
 					AnimRate() = 0.0f;
 					TweenRate() = tweenTime > 0.0f ? 1.0f / tweenTime : 10.0f;
 					bAnimNotify() = false;
-					OldAnimRate() = 0.0f;
+					SetOldAnimRate(this, 0.0f);
 					AnimMinRate() = 0.0f;
 				}
 				bAnimFinished() = false;
@@ -296,6 +356,12 @@ void UActor::LoopAnim(const NameString& sequence, float rate, float tweenTime, f
 
 void UActor::TweenAnim(const NameString& sequence, float tweenTime)
 {
+	if (engine->LaunchInfo.IsBrotherBear())
+	{
+		PlayAnimKW(sequence, false, 0.0f, tweenTime, 0.0f, EAnimType::AT_Replace, {});
+		return;
+	}
+
 	if (Mesh())
 	{
 		MeshAnimSeq* seq = Mesh()->GetSequence(sequence);
@@ -309,7 +375,7 @@ void UActor::TweenAnim(const NameString& sequence, float tweenTime)
 			AnimRate() = 0.0f;
 			AnimMinRate() = 0.0f;
 			TweenRate() = tweenTime > 0.0f ? 1.0f / (tweenTime * seq->NumFrames) : 0.0f;
-			OldAnimRate() = AnimRate();
+			SetOldAnimRate(this, AnimRate());
 			bAnimNotify() = false;
 			bAnimFinished() = false;
 			bAnimLoop() = false;
@@ -319,16 +385,46 @@ void UActor::TweenAnim(const NameString& sequence, float tweenTime)
 
 void UActor::PlayAnim_HP(const NameString& Sequence, std::optional<float> Rate, std::optional<float> TweenTime, std::optional<EAnimType> Type, std::optional<NameString> RootBone)
 {
-	LogUnimplemented("Actor.PlayAnim_HP");
+	if (engine->LaunchInfo.IsBrotherBear())
+	{
+		// A tween time left out means a half second cross-fade
+		PlayAnimKW(Sequence, false, Rate.value_or(1.0f), TweenTime.value_or(-1.0f), 0.0f, Type.value_or(EAnimType::AT_Replace), RootBone.value_or(NameString()));
+		return;
+	}
+
+	if (!IsMainChannel(RootBone))
+	{
+		LogUnimplemented("Actor.PlayAnim with a root bone");
+		return;
+	}
+	PlayAnim(Sequence, Rate.value_or(1.0f), TweenTime.value_or(0.0f));
 }
 
 void UActor::LoopAnim_HP(const NameString& Sequence, std::optional<float> Rate, std::optional<float> TweenTime, std::optional<float> MinRate, std::optional<EAnimType> Type, std::optional<NameString> RootBone)
 {
-	LogUnimplemented("Actor.LoopAnim_HP");
+	if (engine->LaunchInfo.IsBrotherBear())
+	{
+		PlayAnimKW(Sequence, true, Rate.value_or(1.0f), TweenTime.value_or(-1.0f), MinRate.value_or(0.0f), Type.value_or(EAnimType::AT_Replace), RootBone.value_or(NameString()));
+		return;
+	}
+
+	if (!IsMainChannel(RootBone))
+	{
+		LogUnimplemented("Actor.LoopAnim with a root bone");
+		return;
+	}
+	LoopAnim(Sequence, Rate.value_or(1.0f), TweenTime.value_or(0.0f), MinRate.value_or(0.0f));
 }
 
 void UActor::TickAnimation(float elapsed)
 {
+	if (engine->LaunchInfo.IsBrotherBear())
+	{
+		TickAnimationKW(elapsed);
+		TickRootMotionKW();
+		return;
+	}
+
 	if (StateFrame && StateFrame->LatentState == LatentRunState::FinishAnim)
 	{
 		if (!IsAnimating() || AnimFrame() >= AnimLast())
@@ -591,29 +687,133 @@ void UActor::SetTweenFromBlendAnimFrame(int slot)
 	}
 }
 
-UActor* UActor::CreateAnimChannel(UClass* NewClass, EAnimType Type, const NameString& RootBone, bool bTransient)
+UActor* UActor::CreateAnimChannel(UClass* NewClass, EAnimType Type, const NameString& RootBone, bool bTransient, bool bNotReplaceable)
 {
-	auto animChannel = Spawn(NewClass, {}, {}, {}, {});
-	LogUnimplemented("Actor.CreateAnimChannel");
-	return animChannel;
+	// A channel is an actor that plays its own animation on part of its owner's skeleton: the bones from AnimBone to
+	// AnimBone + NumChildren. The owner lists its channels in AuxAnims and applies them, in order, after its own animation.
+	USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh());
+	if (!mesh || RootBone.IsNone() || PropOffsets_Actor.AuxAnims.DataOffset == ~(size_t)0)
+		return nullptr;
+
+	int rootBone = BoneNumber(RootBone);
+	if (rootBone < 0)
+		return nullptr;
+
+	// A channel of the same kind on the same bone is replaced
+	for (size_t i = 0; i < AuxAnims().size(); i++)
+	{
+		UActor* channel = AuxAnims()[i];
+		if (channel && channel->AnimBone() == rootBone && channel->bAnimTransient() == bTransient && channel->bAnimNotReplaceable() == bNotReplaceable)
+		{
+			RemoveAnimChannelKW(i);
+			i--;
+		}
+	}
+
+	UActor* channel = Spawn(NewClass, this, {}, {}, {});
+	if (!channel)
+		return nullptr;
+
+	// The channel plays its animation on the owner's skeleton. It is never drawn itself.
+	channel->Mesh() = Mesh();
+	channel->SkelAnim() = SkelAnim();
+	channel->AnimBone() = (uint8_t)rootBone;
+	channel->bAnimTransient() = bTransient;
+	channel->bAnimNotReplaceable() = bNotReplaceable;
+	channel->bHidden() = true;
+
+	if (Type == EAnimType::AT_Combine)
+	{
+		// Combined channels go first, so channels that replace bones are applied over them
+		AuxAnims().Array->Insert(0, 1);
+		AuxAnims()[0] = channel;
+	}
+	else
+	{
+		// Replacing removes the other replaceable channels on that part of the skeleton
+		for (size_t i = AuxAnims().size(); i > 0; i--)
+		{
+			UActor* other = AuxAnims()[i - 1];
+			if (!other || (IsInBoneRangeKW(mesh, other->AnimBone(), rootBone) && !other->bAnimNotReplaceable()))
+				RemoveAnimChannelKW(i - 1);
+		}
+		AuxAnims().push_back(channel);
+	}
+	return channel;
 }
 
 int UActor::BoneNumber(const NameString& Bone)
 {
-	LogUnimplemented("Actor.BoneNumber");
-	return 0;
+	if (USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh()))
+	{
+		for (size_t i = 0; i < mesh->RefSkeleton.size(); i++)
+		{
+			if (mesh->RefSkeleton[i].Name == Bone)
+				return (int)i;
+		}
+	}
+	return -1;
 }
 
 NameString UActor::BoneName(int Bone)
 {
-	LogUnimplemented("Actor.BoneName");
+	USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh());
+	if (mesh && Bone >= 0 && (size_t)Bone < mesh->RefSkeleton.size())
+		return mesh->RefSkeleton[Bone].Name;
 	return {};
 }
 
+// The transform a skeletal mesh is drawn with (see VisibleMesh)
+static mat4 MeshToWorld(UActor* actor, UMesh* mesh)
+{
+	return mat4::translate(actor->Location() + actor->PrePivot()) * Coords::Rotation(actor->Rotation()).ToMatrix() * mat4::scale(actor->DrawScale()) * mesh->meshToObject;
+}
+
+// Like Unreal's FCoords::OrthoRotation: yaw and pitch point along the X axis, then the roll turns the Y axis into place
+static Rotator OrthoRotation(const vec3& xAxis, const vec3& yAxis)
+{
+	Rotator rotation = Rotator::FromVector(xAxis);
+	mat4 noRoll = Coords::Rotation(rotation).ToMatrix();
+	vec3 noRollY = (noRoll * vec4(0.0f, 1.0f, 0.0f, 0.0f)).xyz();
+	vec3 noRollZ = (noRoll * vec4(0.0f, 0.0f, 1.0f, 0.0f)).xyz();
+	int roll = (int)(std::atan2(dot(yAxis, noRollZ), dot(yAxis, noRollY)) * (32768.0f / 3.14159265359f));
+
+	// Take the roll direction that matches the rotation convention
+	Rotator a = rotation, b = rotation;
+	a.Roll = roll;
+	b.Roll = -roll;
+	vec3 aY = (Coords::Rotation(a).ToMatrix() * vec4(0.0f, 1.0f, 0.0f, 0.0f)).xyz();
+	vec3 bY = (Coords::Rotation(b).ToMatrix() * vec4(0.0f, 1.0f, 0.0f, 0.0f)).xyz();
+	return dot(aY, yAxis) >= dot(bY, yAxis) ? a : b;
+}
+
+// A bone's location in the world, in the pose being drawn. Actors without a skeletal mesh return their own location,
+// and a bone the mesh doesn't have gives the mesh's origin.
 vec3 UActor::BonePos(const NameString& Bone)
 {
-	LogUnimplemented("Actor.BonePos");
-	return vec3(0.0f);
+	USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh());
+	if (!mesh)
+		return Location();
+
+	vec3 origin(0.0f), xAxis, yAxis, zAxis;
+	mesh->GetBoneCoordsKW(this, engine->render->TextureFrameCounter, BoneNumber(Bone), origin, xAxis, yAxis, zAxis);
+	return (MeshToWorld(this, mesh) * vec4(origin, 1.0f)).xyz();
+}
+
+// A bone's rotation in the world, in the pose being drawn. Actors without a skeletal mesh return their own rotation,
+// and a bone the mesh doesn't have gives the mesh's rotation.
+Rotator UActor::BoneRot(const NameString& Bone)
+{
+	USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh());
+	if (!mesh)
+		return Rotation();
+
+	vec3 origin, xAxis(1.0f, 0.0f, 0.0f), yAxis(0.0f, 1.0f, 0.0f), zAxis(0.0f, 0.0f, 1.0f);
+	mesh->GetBoneCoordsKW(this, engine->render->TextureFrameCounter, BoneNumber(Bone), origin, xAxis, yAxis, zAxis);
+	mat4 meshToWorld = MeshToWorld(this, mesh);
+	vec3 worldX = (meshToWorld * vec4(xAxis, 0.0f)).xyz();
+	vec3 worldY = (meshToWorld * vec4(yAxis, 0.0f)).xyz();
+	return OrthoRotation(worldX, worldY);
 }
 
 UTexture* UActor::GetMultiskin(int index)
@@ -628,4 +828,325 @@ vec3 UActor::GetRenderExtent()
 {
 	LogUnimplemented("Actor.GetRenderExtent");
 	return vec3(100.0f);
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Brother Bear (KnowWonder) animation
+//
+// KnowWonder replaced Unreal's tweening. AnimFrame never goes negative: a new animation starts playing straight away,
+// while TweenAlpha rises from 0 to 1 at TweenRate per second. Until it reaches 1 the skeleton is blended from the pose
+// it had in the previous frame (see USkeletalMesh::GetPoseKW). A tween time of 0 snaps to the new animation, and a
+// negative one (the default when a script leaves it out) cross-fades for half a second.
+//
+// Animations can also play on part of the skeleton. Passing a root bone to PlayAnim spawns a transient AnimChannel
+// actor that plays the animation on that bone and its children, and removes itself when the animation ends.
+// The root bone 'Move' instead plays on the whole skeleton and sets bAnimMove.
+
+MeshAnimSeq* UActor::FindAnimSeqKW(const NameString& sequence)
+{
+	Array<MeshAnimSeq>* seqs = nullptr;
+	if (SkelAnim())
+		seqs = &SkelAnim()->AnimSeqs;
+	else if (Mesh())
+		seqs = &Mesh()->AnimSeqs;
+	if (seqs)
+	{
+		for (MeshAnimSeq& seq : *seqs)
+		{
+			if (seq.Name == sequence)
+				return &seq;
+		}
+	}
+	return nullptr;
+}
+
+UActor* UActor::FindAnimChannelKW(const NameString& rootBone)
+{
+	int bone = BoneNumber(rootBone);
+	if (bone < 0 || PropOffsets_Actor.AuxAnims.DataOffset == ~(size_t)0)
+		return nullptr;
+	for (UActor* channel : AuxAnims())
+	{
+		if (channel && channel->AnimBone() == bone)
+			return channel;
+	}
+	return nullptr;
+}
+
+void UActor::RemoveAnimChannelKW(size_t index)
+{
+	UActor* channel = AuxAnims()[index];
+	AuxAnims().Array->Remove(index, 1);
+	if (channel && !channel->bDeleteMe())
+		channel->Destroy();
+}
+
+void UActor::StopAnimChannelsKW(int rootBone, bool allBones)
+{
+	if (PropOffsets_Actor.AuxAnims.DataOffset == ~(size_t)0)
+		return;
+
+	USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh());
+	for (size_t i = AuxAnims().size(); i > 0; i--)
+	{
+		UActor* channel = AuxAnims()[i - 1];
+		if (!channel)
+		{
+			AuxAnims().Array->Remove(i - 1, 1);
+			continue;
+		}
+		if (!allBones && (!mesh || !IsInBoneRangeKW(mesh, channel->AnimBone(), rootBone)))
+			continue;
+		if (channel->bAnimNotReplaceable())
+			continue;
+
+		// Transient channels go away. Others, such as eye blinks, only stop until their script plays another animation.
+		if (channel->bAnimTransient())
+			RemoveAnimChannelKW(i - 1);
+		else
+			channel->AnimSequence() = {};
+	}
+}
+
+bool UActor::PlayAnimKW(const NameString& sequence, bool loop, float rate, float tweenTime, float minRate, EAnimType type, NameString rootBone)
+{
+	if (!Mesh())
+	{
+		LogMessage("PlayAnim: " + Name.ToString() + " has no mesh for " + sequence.ToString());
+		return false;
+	}
+
+	if (rootBone == NameString("Move"))
+	{
+		rootBone = {};
+		bAnimMove() = true;
+	}
+	else
+	{
+		bAnimMove() = false;
+	}
+
+	USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh());
+	if (mesh && !rootBone.IsNone())
+	{
+		if (sequence.IsNone())
+		{
+			// No sequence stops whatever plays on that part of the skeleton
+			int bone = BoneNumber(rootBone);
+			if (bone < 0)
+				return false;
+			StopAnimChannelsKW(bone, false);
+			return true;
+		}
+
+		UClass* channelClass = engine->packages->FindClass("Engine.AnimChannel");
+		if (UActor* channel = CreateAnimChannel(channelClass, type, rootBone, true, false))
+			return channel->PlayAnimKW(sequence, loop, rate, tweenTime, minRate, EAnimType::AT_Replace, {});
+	}
+
+	if (type == EAnimType::AT_Replace)
+		StopAnimChannelsKW(0, true);
+
+	MeshAnimSeq* seq = FindAnimSeqKW(sequence);
+	if (!seq && !sequence.IsNone())
+	{
+		LogMessage("PlayAnim: Sequence '" + sequence.ToString() + "' not found for mesh '" + Mesh()->Name.ToString() + "'");
+		return false;
+	}
+
+	if (seq)
+	{
+		float frameRate = seq->Rate / std::max(seq->NumFrames, 1);
+
+		// Asking to loop the sequence that already loops only changes its speed
+		if (AnimSequence() == sequence && loop && bAnimLoop() && IsAnimating())
+		{
+			AnimRate() = rate * frameRate;
+			bAnimFinished() = false;
+			AnimMinRate() = minRate != 0.0f ? minRate * frameRate : 0.0f;
+			return true;
+		}
+
+		AnimRate() = rate * frameRate;
+		AnimLast() = 1.0f - 1.0f / std::max(seq->NumFrames, 1);
+		AnimMinRate() = minRate != 0.0f ? minRate * frameRate : 0.0f;
+		bAnimNotify() = !seq->Notifys.empty();
+		bAnimLoop() = loop;
+	}
+	else
+	{
+		AnimLast() = 0.0f;
+		bAnimLoop() = false;
+	}
+
+	AnimSequence() = sequence;
+	bAnimFinished() = false;
+	AnimFrame() = 0.0f;
+	TweenAlpha() = 0.0f;
+
+	if (AnimLast() == 0.0f) // Single frame
+	{
+		AnimMinRate() = 0.0f;
+		AnimRate() = 0.0f;
+		bAnimNotify() = false;
+	}
+
+	if (tweenTime > 0.0f)
+	{
+		TweenRate() = 1.0f / tweenTime;
+	}
+	else if (tweenTime < 0.0f)
+	{
+		TweenRate() = 2.0f;
+	}
+	else
+	{
+		TweenRate() = 0.0f;
+		TweenAlpha() = 1.0f;
+	}
+	return true;
+}
+
+// KnowWonder's root motion. While an animation plays with the root bone 'Move' (bAnimMove), such as Koda and Kenai
+// climbing onto a ledge, the actor moves by however far the animation's root bone moved since the last tick, counted
+// from the animation's first key. The move collides and slides once along what it hits. The root bone itself is drawn
+// at its reference position meanwhile (see USkeletalMesh::ApplyAnim), so the mesh doesn't move twice.
+void UActor::TickRootMotionKW()
+{
+	USkeletalMesh* mesh = UObject::TryCast<USkeletalMesh>(Mesh());
+	vec3 root;
+	if (!bAnimMove() || Role() != ROLE_Authority || !mesh || !mesh->GetRootPositionKW(this, false, root))
+	{
+		RootMotionKW.Valid = false;
+		return;
+	}
+
+	if (!RootMotionKW.Valid || RootMotionKW.Sequence != AnimSequence() || AnimFrame() < RootMotionKW.Frame)
+	{
+		mesh->GetRootPositionKW(this, true, RootMotionKW.LastRoot);
+		RootMotionKW.Sequence = AnimSequence();
+		RootMotionKW.Valid = true;
+	}
+
+	vec3 delta = root - RootMotionKW.LastRoot;
+	RootMotionKW.LastRoot = root;
+	RootMotionKW.Frame = AnimFrame();
+	if (delta == vec3(0.0f))
+		return;
+
+	vec3 move = (Coords::Rotation(Rotation()).ToMatrix() * mat4::scale(DrawScale()) * mesh->meshToObject * vec4(delta, 0.0f)).xyz();
+	CollisionHit hit = TryMove(move);
+	if (hit.Fraction < 1.0f && !bDeleteMe())
+	{
+		vec3 rest = move * (1.0f - hit.Fraction);
+		TryMove(rest - hit.Normal * dot(rest, hit.Normal));
+	}
+}
+
+void UActor::TickAnimationKW(float elapsed)
+{
+	if (StateFrame && StateFrame->LatentState == LatentRunState::FinishAnim && bAnimFinished())
+		StateFrame->LatentState = LatentRunState::Continue;
+
+	// A transient channel's AnimEnd goes to its owner
+	UActor* eventTarget = (AnimBone() != 0 && bAnimTransient() && Owner()) ? Owner() : this;
+
+	// Like KnowWonder, this doesn't use up the time while only tweening, so tweens without an animation run up to four times faster
+	for (int iteration = 0; iteration < 4 && elapsed > 0.0f && IsAnimating(); iteration++)
+	{
+		if (TweenRate() > 0.0f)
+		{
+			TweenAlpha() += elapsed * TweenRate();
+			if (TweenAlpha() >= 1.0f)
+			{
+				TweenAlpha() = 1.0f;
+				TweenRate() = 0.0f;
+				if (AnimRate() == 0.0f)
+				{
+					bAnimFinished() = true;
+					CallEvent(eventTarget, EventName::AnimEnd);
+				}
+			}
+		}
+
+		if (AnimRate() == 0.0f)
+			continue;
+
+		float oldFrame = AnimFrame();
+		if (AnimRate() > 0.0f)
+			AnimFrame() += elapsed * AnimRate();
+		else
+			AnimFrame() += elapsed * std::max(AnimMinRate(), -AnimRate() * length(Velocity()));
+
+		// Stop at the first notify passed
+		if (bAnimNotify())
+		{
+			MeshAnimSeq* seq = FindAnimSeqKW(AnimSequence());
+			const MeshAnimNotify* notify = nullptr;
+			if (seq)
+			{
+				for (const MeshAnimNotify& n : seq->Notifys)
+				{
+					if (n.Time > oldFrame && n.Time <= AnimFrame() && (!notify || n.Time < notify->Time))
+						notify = &n;
+				}
+			}
+			if (notify)
+			{
+				elapsed = elapsed * (AnimFrame() - notify->Time) / (AnimFrame() - oldFrame);
+				AnimFrame() = notify->Time;
+				if (FindEventFunction(this, notify->Function))
+					CallEvent(this, notify->Function);
+				continue;
+			}
+		}
+
+		if (AnimFrame() < AnimLast())
+			break;
+
+		if (bAnimLoop())
+		{
+			if (AnimFrame() < 1.0f)
+			{
+				elapsed = 0.0f;
+			}
+			else
+			{
+				elapsed = elapsed * (AnimFrame() - 1.0f) / (AnimFrame() - oldFrame);
+				AnimFrame() = 0.0f;
+			}
+
+			// Looping animations send AnimEnd when they pass the last frame, not when they wrap around
+			if (oldFrame < AnimLast())
+			{
+				if (StateFrame && StateFrame->LatentState == LatentRunState::FinishAnim)
+					bAnimFinished() = true;
+				CallEvent(eventTarget, EventName::AnimEnd);
+			}
+		}
+		else
+		{
+			elapsed = elapsed * (AnimFrame() - AnimLast()) / (AnimFrame() - oldFrame);
+			AnimFrame() = AnimLast();
+			bAnimFinished() = true;
+			AnimRate() = 0.0f;
+			CallEvent(eventTarget, EventName::AnimEnd);
+		}
+	}
+
+	if (StateFrame && StateFrame->LatentState == LatentRunState::FinishAnim && bAnimFinished())
+		StateFrame->LatentState = LatentRunState::Continue;
+
+	// Remove transient channels that have played to the end and been drawn there
+	if (PropOffsets_Actor.AuxAnims.DataOffset != ~(size_t)0)
+	{
+		for (size_t i = AuxAnims().size(); i > 0; i--)
+		{
+			UActor* channel = AuxAnims()[i - 1];
+			if (!channel || channel->bDeleteMe())
+				AuxAnims().Array->Remove(i - 1, 1);
+			else if (channel->bAnimTransient() && !channel->bAnimLoop() && channel->AnimFrame() >= channel->AnimLast() && channel->SkelPose.Valid)
+				RemoveAnimChannelKW(i - 1);
+		}
+	}
 }

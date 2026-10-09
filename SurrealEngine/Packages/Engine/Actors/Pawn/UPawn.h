@@ -18,7 +18,7 @@ public:
 	void Tick(float elapsed) override;
 	void TickRotating(float elapsed) override;
 
-	void InitActorZone() override;
+	void RefreshActorZone() override;
 	void UpdateActorZone() override;
 
 	void MoveTo(const vec3& newDestination, float speed);
@@ -33,6 +33,9 @@ public:
 
 	bool TickRotateTo(const vec3& target);
 	bool TickMoveTo(const vec3& target);
+
+	// Brother Bear (KnowWonder): starts a climb (script event Mount) when walking or falling into a climbable ledge
+	bool MountKW(const vec3& up, const CollisionHit& hit);
 
 	// Returns true if any of the several points of other is visible (origin, top, bottom)
 	// ignoreDistance is a Deus Ex only parameter, it is always false on Unreal.
@@ -116,6 +119,8 @@ public:
 	float& LastSeenTime() { return Value<float>(PropOffsets_Pawn.LastSeenTime); }
 	float& MaxDesiredSpeed() { return Value<float>(PropOffsets_Pawn.MaxDesiredSpeed); }
 	float& MaxStepHeight() { return Value<float>(PropOffsets_Pawn.MaxStepHeight); }
+	float& MaxMountHeight() { return Value<float>(PropOffsets_Pawn.MaxMountHeight); } // Brother Bear only
+	BitfieldBool bClimbSpecial() { return BoolValue(PropOffsets_Pawn.bClimbSpecial); } // Brother Bear only
 	float& MeleeRange() { return Value<float>(PropOffsets_Pawn.MeleeRange); }
 	std::string& MenuName() { return Value<std::string>(PropOffsets_Pawn.MenuName); }
 	float& MinHitWall() { return Value<float>(PropOffsets_Pawn.MinHitWall); }

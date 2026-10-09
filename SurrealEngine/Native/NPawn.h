@@ -45,4 +45,13 @@ public:
 	static void ReachablePathnodes(UObject* Self, UObject* BaseClass, UObject*& NavPoint, UObject* FromPoint, float& distance, std::optional<bool> bUsePrunedPaths);
 	static void StrafeFacing_Deus(UObject* Self, const vec3& NewDestination, UObject* NewTarget, std::optional<float> speed);
 	static void StrafeTo_Deus(UObject* Self, const vec3& NewDestination, const vec3& NewFocus, std::optional<float> speed);
+
+	// Brother Bear
+	static void AddSpecialPawn(UObject* Self);
+	static void CanSeeFrom(UObject* Self, UObject* Other, const vec3& FromLocation, std::optional<Rotator> FaceDirection, BitfieldBool& ReturnValue);
+	static void ClientHearSound_BB(UObject* Self, UObject* Actor, int Id, UObject* S, const vec3& SoundLocation, const vec3& Parameters, bool Disable3D, bool Loop, float PitchVariance, float RollOff);
+	static void FindPath(UObject* Self, UObject* StartPoint, const NameString& DestClass, UObject*& ReturnValue);
+	static void RemoveSpecialPawn(UObject* Self);
+	static void StrafeFacing_BB(UObject* Self, const vec3& NewDestination, UObject* NewTarget, std::optional<float> speed);
+	static void StrafeTo_BB(UObject* Self, const vec3& NewDestination, const vec3& NewFocus, std::optional<float> speed);
 };

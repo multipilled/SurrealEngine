@@ -243,6 +243,9 @@ struct PropertyOffsets_Pawn
 	PropertyDataOffset bIsCrawler;
 	PropertyDataOffset HuntOffDistance;
 	PropertyDataOffset bDoAutoSerpentine;
+	// Brother Bear (KnowWonder) additions
+	PropertyDataOffset MaxMountHeight;
+	PropertyDataOffset bClimbSpecial;
 };
 
 extern PropertyOffsets_Pawn PropOffsets_Pawn;
@@ -252,6 +255,7 @@ struct PropertyOffsets_Actor
 	PropertyDataOffset Acceleration;
 	PropertyDataOffset AmbientGlow;
 	PropertyDataOffset AmbientSound;
+	PropertyDataOffset AnimBone;
 	PropertyDataOffset AnimFrame;
 	PropertyDataOffset AnimLast;
 	PropertyDataOffset AnimMinRate;
@@ -262,6 +266,7 @@ struct PropertyOffsets_Actor
 	PropertyDataOffset BlendAnimRate;
 	PropertyDataOffset BlendTweenRate;
 	PropertyDataOffset AttachTag;
+	PropertyDataOffset AuxAnims;
 	PropertyDataOffset Base;
 	PropertyDataOffset Brush;
 	PropertyDataOffset Buoyancy;
@@ -346,6 +351,7 @@ struct PropertyOffsets_Actor
 	PropertyDataOffset Touching;
 	PropertyDataOffset TransientSoundRadius;
 	PropertyDataOffset TransientSoundVolume;
+	PropertyDataOffset TweenAlpha;
 	PropertyDataOffset TweenRate;
 	PropertyDataOffset Velocity;
 	PropertyDataOffset VisibilityHeight;
@@ -360,7 +366,10 @@ struct PropertyOffsets_Actor
 	PropertyDataOffset bAnimByOwner;
 	PropertyDataOffset bAnimFinished;
 	PropertyDataOffset bAnimLoop;
+	PropertyDataOffset bAnimMove;
+	PropertyDataOffset bAnimNotReplaceable;
 	PropertyDataOffset bAnimNotify;
+	PropertyDataOffset bAnimTransient;
 	PropertyDataOffset bAssimilated;
 	PropertyDataOffset bBlockActors;
 	PropertyDataOffset bBlockPlayers;
@@ -781,6 +790,9 @@ struct PropertyOffsets_PlayerPawn
 	PropertyDataOffset shaketimer;
 	PropertyDataOffset shakevert;
 	PropertyDataOffset verttimer;
+	// KnowWonder (Brother Bear): set by script to ask the engine for a save at the end of the tick
+	PropertyDataOffset bQueuedToSaveGame;
+	PropertyDataOffset OptionSaveScreenBMP;
 };
 
 extern PropertyOffsets_PlayerPawn PropOffsets_PlayerPawn;

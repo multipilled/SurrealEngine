@@ -7,9 +7,9 @@
 #include "Packages/Engine/Resources/Level/ULevel.h"
 #include "VM/ScriptCall.h"
 
-void UPawn::InitActorZone()
+void UPawn::RefreshActorZone()
 {
-	UActor::InitActorZone();
+	UActor::RefreshActorZone();
 
 	FootRegion() = FindRegion({ 0.0f, 0.0f, -CollisionHeight() });
 	HeadRegion() = FindRegion({ 0.0f, 0.0f, EyeHeight() });

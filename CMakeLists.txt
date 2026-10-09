@@ -90,6 +90,8 @@ set(SURREALCOMMON_SOURCES
 	SurrealEngine/Commandlet/Native/NativeCppUpdater.cpp
 	SurrealEngine/Commandlet/Native/NativeCppUpdater.h
 	SurrealEngine/Commandlet/QuitCommandlet.cpp
+	SurrealEngine/Commandlet/NativeAuditCommandlet.cpp
+	SurrealEngine/Commandlet/NativeAuditCommandlet.h
 	SurrealEngine/Commandlet/QuitCommandlet.h
 	SurrealEngine/Commandlet/RunCommandlet.cpp
 	SurrealEngine/Commandlet/RunCommandlet.h
@@ -133,6 +135,8 @@ set(SURREALCOMMON_SOURCES
 	SurrealEngine/Render/VisiblePortal.h
 	SurrealEngine/Render/VisibleSprite.cpp
 	SurrealEngine/Render/VisibleSprite.h
+	SurrealEngine/Render/VisibleEmitter.cpp
+	SurrealEngine/Render/VisibleEmitter.h
 	SurrealEngine/Render/VisibleTranslucent.h
 	SurrealEngine/Render/RenderSubsystem.cpp
 	SurrealEngine/Render/RenderSubsystem.h
@@ -160,6 +164,7 @@ set(SURREALCOMMON_SOURCES
 	SurrealEngine/VM/Iterator.h
 	SurrealEngine/Audio/AudioSource.h
 	SurrealEngine/Audio/AudioSource.cpp
+	SurrealEngine/Audio/BinkAudioSource.cpp
 	SurrealEngine/Audio/AudioDevice.cpp
 	SurrealEngine/Audio/AudioDevice.h
 	SurrealEngine/Video/VideoPlayer.cpp
@@ -294,6 +299,16 @@ set(SURREALCOMMON_SOURCES
 	SurrealEngine/Native/NWebResponse.h
 	SurrealEngine/Native/NWindow.cpp
 	SurrealEngine/Native/NWindow.h
+	SurrealEngine/Native/NWind.cpp
+	SurrealEngine/Native/NWind.h
+	SurrealEngine/Native/NGesture.cpp
+	SurrealEngine/Native/NGesture.h
+	SurrealEngine/Native/NParticleFX.cpp
+	SurrealEngine/Native/NParticleFX.h
+	SurrealEngine/Native/NParticleEmitter.cpp
+	SurrealEngine/Native/NParticleEmitter.h
+	SurrealEngine/Native/NEmitterBB.cpp
+	SurrealEngine/Native/NEmitterBB.h
 	SurrealEngine/RenderDevice/RenderDevice.cpp
 	SurrealEngine/RenderDevice/RenderDevice.h
 	SurrealEngine/RenderDevice/Vulkan/BufferManager.cpp
@@ -509,6 +524,8 @@ set(SURREALCOMMON_SOURCES
 	SurrealEngine/Packages/Engine/USurrealClient.cpp
 	SurrealEngine/Packages/Engine/USurrealClient.h
 	SurrealEngine/Packages/Engine/UViewport.h
+	SurrealEngine/Packages/Engine/Actors/EmitterBB.cpp
+	SurrealEngine/Packages/Engine/Actors/EmitterBB.h
 	SurrealEngine/Packages/Engine/Actors/UActor.cpp
 	SurrealEngine/Packages/Engine/Actors/UActor.h
 	SurrealEngine/Packages/Engine/Actors/UActor_Animation.cpp
@@ -1260,7 +1277,8 @@ else()
 endif()
 
 if(MSVC)
-	# Create stripped PDBs for nightly builds
+	# Create stripped PDBs for nightly builds. Single-config generators such as Ninja don't create the folder.
+	file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/RelWithDebInfo)
 	set_target_properties(SurrealEngine PROPERTIES LINK_FLAGS_RELWITHDEBINFO /PDBSTRIPPED:${CMAKE_CURRENT_BINARY_DIR}/RelWithDebInfo/SurrealEngine-stripped.pdb)
 	set_target_properties(SurrealEditor PROPERTIES LINK_FLAGS_RELWITHDEBINFO /PDBSTRIPPED:${CMAKE_CURRENT_BINARY_DIR}/RelWithDebInfo/SurrealEditor-stripped.pdb)
 	set_target_properties(SurrealDebugger PROPERTIES LINK_FLAGS_RELWITHDEBINFO /PDBSTRIPPED:${CMAKE_CURRENT_BINARY_DIR}/RelWithDebInfo/SurrealDebugger-stripped.pdb)

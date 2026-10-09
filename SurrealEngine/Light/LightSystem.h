@@ -37,6 +37,13 @@ public:
 		{
 			for (int i = 0, count = NumLights; i < count; i++)
 			{
+				if (Lights[i].Directional)
+				{
+					float d = dot(Lights[i].Direction, normal);
+					dynamicLight += Lights[i].Color * (twosided ? std::abs(d) : std::max(d, 0.0f));
+					continue;
+				}
+
 				vec3 L = Lights[i].Location - location;
 
 				// Distance falloff
@@ -159,6 +166,8 @@ public:
 		vec3 Location;
 		float InvRadiusSquared;
 		vec3 Color;
+		bool Directional; // Sunlight: no falloff, shines from Direction
+		vec3 Direction;
 	} Lights[MaxLights];
 	int NumLights;
 
@@ -219,5 +228,6 @@ private:
 	float AmbientGlowAmount = 0.0f;
 
 	Array<UActor*> TempDynLightList;
+	Array<UActor*> Sunlights;
 	LightActorTree LightTree;
 };

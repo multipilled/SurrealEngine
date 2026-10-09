@@ -55,6 +55,7 @@ private:
 
 	std::string promptline;
 	std::string cmdline;
+	std::string PendingInput;
 	bool ExitRequested = false;
 
 	bool PromptLineActive = false;

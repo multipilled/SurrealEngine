@@ -18,9 +18,30 @@ static uint32_t HashIniString(const std::string& str)
 	return hash;
 }
 
+// Some games save their localization files as UTF-16 with a byte order mark. Engine strings hold one byte per
+// character, so convert them to Latin-1 the way non-Unicode builds of Unreal did.
+static std::string ConvertFromUTF16(const std::string& text)
+{
+	bool littleEndian = text.size() >= 2 && (uint8_t)text[0] == 0xff && (uint8_t)text[1] == 0xfe;
+	bool bigEndian = text.size() >= 2 && (uint8_t)text[0] == 0xfe && (uint8_t)text[1] == 0xff;
+	if (!littleEndian && !bigEndian)
+		return text;
+
+	std::string result;
+	result.reserve(text.size() / 2);
+	for (size_t i = 2; i + 1 < text.size(); i += 2)
+	{
+		uint16_t c = littleEndian ? (uint8_t)text[i] | ((uint8_t)text[i + 1] << 8) : ((uint8_t)text[i] << 8) | (uint8_t)text[i + 1];
+		if (c >= 0xdc00 && c <= 0xdfff) // Second half of a surrogate pair
+			continue;
+		result.push_back(c <= 0xff ? (char)c : '?');
+	}
+	return result;
+}
+
 IniFile::IniFile(const std::string& filename)
 {
-	std::string text = File::read_all_text(filename);
+	std::string text = ConvertFromUTF16(File::read_all_text(filename));
 	size_t pos = 0;
 	std::string line;
 	std::string sectionName;

@@ -13,7 +13,7 @@
 #include <arm_neon.h>
 #endif
 
-LightEffect::EffectFunc LightEffect::Effects[LE_Unused + 1] =
+LightEffect::EffectFunc LightEffect::Effects[LE_Sunlight + 1] =
 {
 	&LightEffect::NoneEffect, // LE_None
 	&LightEffect::SlowWaveEffect, // LE_TorchWaver - to do: needs implementation
@@ -35,6 +35,7 @@ LightEffect::EffectFunc LightEffect::Effects[LE_Unused + 1] =
 	&LightEffect::CylinderEffect, // LE_Cylinder
 	&LightEffect::SlowWaveEffect, // LE_Rotor - to do: needs implementation
 	&LightEffect::NoneEffect, // LE_Unused
+	&LightEffect::SunlightEffect, // LE_Sunlight
 };
 
 void LightEffect::Run(UActor* light, int width, int height, const vec3* locations, vec3 base, vec3 N, const float* shadowmap, float* result)
@@ -55,7 +56,7 @@ void LightEffect::Run(UActor* light, int width, int height, const vec3* location
 	args.invRadiusSquared = args.invRadius * args.invRadius;
 
 	uint8_t effect = light->LightEffect();
-	if (effect <= LE_Unused)
+	if (effect <= LE_Sunlight)
 		(this->*Effects[effect])(&args);
 	else
 		NoneEffect(&args);
@@ -243,6 +244,21 @@ void LightEffect::NonIncidenceEffect(LightEffectArgs* args)
 	{
 		vec3 L = lightLocation - locations[i];
 		result[i] = shadowmap[i] * std::max(1.0f - length(L) * invRadius, 0.0f);
+	}
+}
+
+void LightEffect::SunlightEffect(LightEffectArgs* args)
+{
+	// Sunlight has no distance falloff. The level's shadow bits decide which texels it reaches.
+	const int size = args->size;
+	const float* shadowmap = args->shadowmap;
+	float* result = args->result;
+	vec3 forward, tmp1, tmp2;
+	Coords::Rotation(args->light->Rotation()).GetAxes(forward, tmp1, tmp2);
+	float angleAttenuation = std::max(dot(-forward, args->N), 0.0f);
+	for (int i = 0; i < size; i++)
+	{
+		result[i] = shadowmap[i] * angleAttenuation;
 	}
 }
 

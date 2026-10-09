@@ -11,6 +11,8 @@ struct GameLaunchInfo
 	std::string gameExecutableName = "";	// Name of the game executable (e.g. "UnrealTournament")
 	std::string gameVersionString = "";		// Version (+ sub version) info as a string (e.g. "469d")
 	std::string url = "";					// The UnrealURL to launch upon startup
+	int saveSlot = -1;						// KnowWonder save slot folder (Save\SlotN), from --saveslot (the original launcher's -SAVESLOT=); -1 means the save folder itself
+	int loadGame = -1;						// Save number to load upon startup, from --loadgame (the original launcher's -LOADGAME=); -1 means start a new game
 
 	bool IsUnreal1() const { return gameExecutableName == "Unreal"; }
 	bool IsUnreal1_226() const { return IsUnreal1() && gameVersion == 226; }
@@ -23,7 +25,8 @@ struct GameLaunchInfo
 	bool IsKlingonHonorGuard() const { return gameExecutableName == "Klingons" || gameExecutableName == "Khg"; }
 	bool IsRune() const { return gameExecutableName == "Rune"; }
 	bool IsHarryPotter1() const { return gameExecutableName == "HP"; }
-	bool IsHarryPotter2() const { return gameExecutableName == "Game"; }
+	bool IsHarryPotter2() const { return gameExecutableName == "Game" && !IsBrotherBear(); }
+	bool IsBrotherBear() const { return gameName == "Disney's Brother Bear"; }
 	bool IsNerfArenaBlast() const { return gameExecutableName == "nerf" || gameExecutableName == "Nerf"; }
 };
 

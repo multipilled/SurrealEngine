@@ -44,6 +44,9 @@ public:
 	bool IsCliveBarkersUndying() const { return launchInfo.IsCliveBarkersUndying(); }
 	bool IsKlingonHonorGuard() const  { return launchInfo.IsKlingonHonorGuard(); }
 	bool IsRune() const { return launchInfo.IsRune(); }
+	bool IsBrotherBear() const { return launchInfo.IsBrotherBear(); }
+
+	bool HasPackage(const NameString& name) const { return packageFilenames.find(name) != packageFilenames.end(); }
 
 	fs::path GetRootFolderPath() const { return gameRootFolderPath; }
 	fs::path GetSystemFolderPath() const { return gameSystemFolderPath; }

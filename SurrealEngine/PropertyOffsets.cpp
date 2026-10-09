@@ -284,6 +284,10 @@ static void InitPropertyOffsets_Pawn(PackageManager* packages)
 		PropOffsets_Pawn.HuntOffDistance = cls->GetPropertyDataOffset("HuntOffDistance");
 		PropOffsets_Pawn.bDoAutoSerpentine = cls->GetPropertyDataOffset("bDoAutoSerpentine");
 	}
+
+	// Brother Bear (KnowWonder) additions; missing in other games, so only use them when IsBrotherBear()
+	PropOffsets_Pawn.MaxMountHeight = cls->GetPropertyDataOffset("MaxMountHeight");
+	PropOffsets_Pawn.bClimbSpecial = cls->GetPropertyDataOffset("bClimbSpecial");
 }
 
 PropertyOffsets_Actor PropOffsets_Actor;
@@ -299,6 +303,7 @@ static void InitPropertyOffsets_Actor(PackageManager* packages)
 	PropOffsets_Actor.Acceleration = cls->GetPropertyDataOffset("Acceleration");
 	PropOffsets_Actor.AmbientGlow = cls->GetPropertyDataOffset("AmbientGlow");
 	PropOffsets_Actor.AmbientSound = cls->GetPropertyDataOffset("AmbientSound");
+	PropOffsets_Actor.AnimBone = cls->GetPropertyDataOffset("AnimBone");
 	PropOffsets_Actor.AnimFrame = cls->GetPropertyDataOffset("AnimFrame");
 	PropOffsets_Actor.AnimLast = cls->GetPropertyDataOffset("AnimLast");
 	PropOffsets_Actor.AnimMinRate = cls->GetPropertyDataOffset("AnimMinRate");
@@ -309,6 +314,7 @@ static void InitPropertyOffsets_Actor(PackageManager* packages)
 	PropOffsets_Actor.BlendAnimRate = cls->GetPropertyDataOffset("BlendAnimRate");
 	PropOffsets_Actor.BlendTweenRate = cls->GetPropertyDataOffset("BlendTweenRate");
 	PropOffsets_Actor.AttachTag = cls->GetPropertyDataOffset("AttachTag");
+	PropOffsets_Actor.AuxAnims = cls->GetPropertyDataOffset("AuxAnims");
 	PropOffsets_Actor.Base = cls->GetPropertyDataOffset("Base");
 	PropOffsets_Actor.Brush = cls->GetPropertyDataOffset("Brush");
 	PropOffsets_Actor.Buoyancy = cls->GetPropertyDataOffset("Buoyancy");
@@ -393,6 +399,7 @@ static void InitPropertyOffsets_Actor(PackageManager* packages)
 	PropOffsets_Actor.Touching = cls->GetPropertyDataOffset("Touching");
 	PropOffsets_Actor.TransientSoundRadius = cls->GetPropertyDataOffset("TransientSoundRadius");
 	PropOffsets_Actor.TransientSoundVolume = cls->GetPropertyDataOffset("TransientSoundVolume");
+	PropOffsets_Actor.TweenAlpha = cls->GetPropertyDataOffset("TweenAlpha");
 	PropOffsets_Actor.TweenRate = cls->GetPropertyDataOffset("TweenRate");
 	PropOffsets_Actor.Velocity = cls->GetPropertyDataOffset("Velocity");
 	PropOffsets_Actor.VisibilityHeight = cls->GetPropertyDataOffset("VisibilityHeight");
@@ -407,6 +414,9 @@ static void InitPropertyOffsets_Actor(PackageManager* packages)
 	PropOffsets_Actor.bAnimByOwner = cls->GetPropertyDataOffset("bAnimByOwner");
 	PropOffsets_Actor.bAnimFinished = cls->GetPropertyDataOffset("bAnimFinished");
 	PropOffsets_Actor.bAnimLoop = cls->GetPropertyDataOffset("bAnimLoop");
+	PropOffsets_Actor.bAnimMove = cls->GetPropertyDataOffset("bAnimMove");
+	PropOffsets_Actor.bAnimNotReplaceable = cls->GetPropertyDataOffset("bAnimNotReplaceable");
+	PropOffsets_Actor.bAnimTransient = cls->GetPropertyDataOffset("bAnimTransient");
 	PropOffsets_Actor.bAnimNotify = cls->GetPropertyDataOffset("bAnimNotify");
 	PropOffsets_Actor.bAssimilated = cls->GetPropertyDataOffset("bAssimilated");
 	PropOffsets_Actor.bBlockActors = cls->GetPropertyDataOffset("bBlockActors");
@@ -852,6 +862,8 @@ static void InitPropertyOffsets_PlayerPawn(PackageManager* packages)
 	PropOffsets_PlayerPawn.shaketimer = cls->GetPropertyDataOffset("shaketimer");
 	PropOffsets_PlayerPawn.shakevert = cls->GetPropertyDataOffset("shakevert");
 	PropOffsets_PlayerPawn.verttimer = cls->GetPropertyDataOffset("verttimer");
+	PropOffsets_PlayerPawn.bQueuedToSaveGame = cls->GetPropertyDataOffset("bQueuedToSaveGame");
+	PropOffsets_PlayerPawn.OptionSaveScreenBMP = cls->GetPropertyDataOffset("OptionSaveScreenBMP");
 }
 
 PropertyOffsets_PlayerReplicationInfo PropOffsets_PlayerReplicationInfo;
@@ -5603,9 +5615,18 @@ void InitPropertyOffsets(PackageManager* packages)
 	InitPropertyOffsets_WarpZoneMarker(packages);
 	InitPropertyOffsets_LiftCenter(packages);
 	InitPropertyOffsets_RenderIterator(packages);
-	InitPropertyOffsets_InternetLink(packages);
-	InitPropertyOffsets_UdpLink(packages);
-	InitPropertyOffsets_TcpLink(packages);
+	if (packages->HasPackage("IpDrv")) // Brother Bear doesn't ship IpDrv
+	{
+		InitPropertyOffsets_InternetLink(packages);
+		InitPropertyOffsets_UdpLink(packages);
+		InitPropertyOffsets_TcpLink(packages);
+	}
+	else
+	{
+		memset(&PropOffsets_InternetLink, 0xff, sizeof(PropOffsets_InternetLink));
+		memset(&PropOffsets_UdpLink, 0xff, sizeof(PropOffsets_UdpLink));
+		memset(&PropOffsets_TcpLink, 0xff, sizeof(PropOffsets_TcpLink));
+	}
 	InitPropertyOffsets_RMusic_Player(packages);
 	if (packages->IsUnreal1())
 	{
