@@ -5,6 +5,26 @@
 > the game's script runs, all 16 maps load and run, rendering, animation, audio, particles, cutscenes, climbing and
 > save/load work; a verified play-through of the levels and arenas is next. Details: [Docs/BrotherBear.md](Docs/BrotherBear.md).
 > Build: [Docs/Building.md](Docs/Building.md). The rest of this README is upstream's.
+>
+> **Brother Bear roadmap** (goal: front end to end credits, all 10 levels, 5 arenas, the Secret Totem Cave, save/load; weighted, overall **65%**)
+>
+> | Milestone | Weight | Done |
+> |---|---|---|
+> | Packages load, script VM (opcode remap), every native registered | 10 | 100% |
+> | Rendering: BSP, lightmaps, sunlight, meshes, skeletal animation and blending | 10 | 100% |
+> | Audio: Bink SFX and dialog, Ogg music, subtitles, XA sounds | 7 | 100% |
+> | Boot, intros, cutscenes, spline cameras | 8 | 100% |
+> | All 16 maps load and run without crashing | 8 | 100% |
+> | Spawns and zones | 5 | 100% |
+> | Climbing root motion, bone position/rotation, climb triggers | 7 | 100% |
+> | Particles (mesh spawning, emitter chains, auto reset) | 4 | 100% |
+> | Front end, saving and loading | 6 | 100% |
+> | Play-through of the 10 main levels | 25 | 0% (not yet verified end to end) |
+> | Combat arenas (5) and the Secret Totem Cave | 6 | 0% (untested) |
+> | Sunlight shadows on meshes, polish | 2 | 0% |
+> | Docs and improvement ideas | 2 | 0% |
+>
+> Want to help with the fork? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ![SEBANNER](Resources/surreal-engine-banner.png)
 
